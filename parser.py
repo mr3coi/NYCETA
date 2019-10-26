@@ -3,7 +3,10 @@ import sys
 from glob import glob
 import pandas as pd
 
-date_columns = ['tpep_pickup_datetime']
+DATE_COLUMNS = [
+        'tpep_pickup_datetime',
+        'tpep_dropoff_datetime'
+        ]
 
 def parse_files(file_regex):
     """Parses the context of files matching file_regex
@@ -17,6 +20,9 @@ def parse_files(file_regex):
 
     all_data_frames = (pd.read_csv(f, header=0) for f in matching_files)
     merged_data = pd.concat((all_data_frames))
+
+    for col in DATE_COLUMNS:
+        merged_data[col] = pd.to_datetime(merged_data[col])
 
     return merged_data
 
