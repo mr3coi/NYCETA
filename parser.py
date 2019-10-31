@@ -42,6 +42,19 @@ def chunk_iter(source, chunk_size):
         yield source[index:index+chunk_size]
 
 
+def empty_table(conn, table_name):
+    """Deletes all rows in a table specified by table_name in a database
+    associated with connection conn.
+
+    :conn: a sqlite3 database connection
+    :table_name: the name of the table to delete
+    """
+    deletion_command = f'DELETE * FROM {table_name}'
+    cur = conn.cursor()
+    cur.execute(deletion_command)
+    conn.commit()
+
+
 def write_to_db(dataframe, db_conn, table_name):
     """Writes the given dataframe to a database table. If the table
     already exists, it will overwrite its contents.
