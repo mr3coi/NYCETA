@@ -28,6 +28,20 @@ def parse_files(file_regex):
     return merged_data
 
 
+def chunk_iter(source, chunk_size):
+    """Iterates over an iterable, dividing it into chunks of size chunk_size.
+    If the length of source is not a multiple of chunk_size, then the last
+    chunk yielded will not be of size chunk_size, and will instead contain
+    all elements that have not yet been yielded.
+
+    :source: the source iterable
+    :chunk_size: the size of the lists to yield
+    :yields: iterables of size chunk_size consisting of elements from source
+    """
+    for index in range(0, len(source), chunk_size):
+        yield source[index:index+chunk_size]
+
+
 def write_to_db(dataframe, db_conn, table_name):
     """Writes the given dataframe to a database table. If the table
     already exists, it will overwrite its contents.
