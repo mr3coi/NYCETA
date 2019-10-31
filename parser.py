@@ -49,7 +49,7 @@ def empty_table(conn, table_name):
     :conn: a sqlite3 database connection
     :table_name: the name of the table to delete
     """
-    deletion_command = f'DELETE * FROM {table_name}'
+    deletion_command = f'DROP TABLE {table_name};'
     cur = conn.cursor()
     cur.execute(deletion_command)
     conn.commit()
