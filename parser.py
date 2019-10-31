@@ -1,25 +1,22 @@
 """ Contains code to read CSV files containing taxi data """
 import sys
 from glob import glob
-import pandas as pd
 import sqlite3
+import pandas as pd
 
 DATE_COLUMNS = [
     'tpep_pickup_datetime',
     'tpep_dropoff_datetime'
     ]
 
-def parse_files(file_regex):
-    """Parses the context of files matching file_regex
+def parse_files(file_list):
+    """Parses the context of files in file_list
 
-    :file_regex: a regular expression matching the files whose contents we
-        want to parse
+    :file_regex: a list of files whose contents should be parsed
     :returns: A pandas dataframe containing every row in the specified files
-
     """
-    matching_files = glob(file_regex)
 
-    all_data_frames = (pd.read_csv(f, header=0) for f in matching_files)
+    all_data_frames = (pd.read_csv(f, header=0) for f in file_list)
     merged_data = pd.concat((all_data_frames))
 
     for col in DATE_COLUMNS:
@@ -62,12 +59,11 @@ def write_to_db(dataframe, db_conn, table_name):
     :dataframe: The dataframe to write to a database table
     :db_conn: The database connection object
     :table_name: The name of the table to which we will write
-
     """
-    dataframe.to_sql(table_name, db_conn, if_exists='replace')
+    dataframe.to_sql(table_name, db_conn, if_exists='append')
 
 
-def parse_files_and_write_to_db(file_regex, db_conn, table_name):
+def parse_files_and_write_to_db(file_regex, db_conn, table_name, chunk_size=5):
     """
     Parses the given files and writes them to a table in a database.
 
@@ -75,10 +71,15 @@ def parse_files_and_write_to_db(file_regex, db_conn, table_name):
         want to parse
     :db_conn: The database connection object
     :table_name: The name of the table to which we will write
-
+    :chunk_size: The number of files to write to the db at once
     """
-    all_data = parse_files(file_regex)
-    write_to_db(all_data, db_conn, table_name)
+    empty_table(db_conn, table_name)
+
+    matching_files = glob(file_regex)
+    for i, chunk in enumerate(chunk_iter(matching_files, chunk_size)):
+        all_data = parse_files(chunk)
+        write_to_db(all_data, db_conn, table_name)
+        print(i)
 
 
 def main(file_regex):
@@ -86,7 +87,6 @@ def main(file_regex):
     Calls parse_files_and_write_to_db.
 
     :file_regex: The regex containing the files to parse.
-
     """
     table_name = 'rides'
     db_conn = sqlite3.connect('rides.db')
