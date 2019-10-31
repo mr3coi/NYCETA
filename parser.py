@@ -5,9 +5,9 @@ import pandas as pd
 import sqlite3
 
 DATE_COLUMNS = [
-        'tpep_pickup_datetime',
-        'tpep_dropoff_datetime'
-        ]
+    'tpep_pickup_datetime',
+    'tpep_dropoff_datetime'
+    ]
 
 def parse_files(file_regex):
     """Parses the context of files matching file_regex
