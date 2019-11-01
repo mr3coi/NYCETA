@@ -1,8 +1,10 @@
 """ Contains code to read CSV files containing taxi data """
 import sys
+from math import ceil
 from glob import glob
 import sqlite3
 import pandas as pd
+from tqdm import tqdm
 
 DATE_COLUMNS = [
     'tpep_pickup_datetime',
@@ -46,7 +48,7 @@ def empty_table(conn, table_name):
     :conn: a sqlite3 database connection
     :table_name: the name of the table to delete
     """
-    deletion_command = f'DROP TABLE {table_name};'
+    deletion_command = f'DROP TABLE IF EXISTS {table_name};'
     cur = conn.cursor()
     cur.execute(deletion_command)
     conn.commit()
@@ -76,15 +78,16 @@ def parse_files_and_write_to_db(file_regex, db_conn, table_name, chunk_size=5):
     empty_table(db_conn, table_name)
 
     matching_files = glob(file_regex)
-    for i, chunk in enumerate(chunk_iter(matching_files, chunk_size)):
-        all_data = parse_files(chunk)
-        write_to_db(all_data, db_conn, table_name)
-        print(i)
+    num_chunks = ceil(len(matching_files)/chunk_size)
+    with tqdm(total=num_chunks) as pbar:
+        for chunk in chunk_iter(matching_files, chunk_size):
+            all_data = parse_files(chunk)
+            write_to_db(all_data, db_conn, table_name)
+            pbar.update(1)
 
 
 def main(file_regex):
-    """
-    Calls parse_files_and_write_to_db.
+    """Calls parse_files_and_write_to_db.
 
     :file_regex: The regex containing the files to parse.
     """
