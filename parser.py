@@ -11,7 +11,8 @@ DATE_COLUMNS = [
     'tpep_dropoff_datetime'
     ]
 
-def parse_files(file_list):
+
+def parse_files(file_list, convert_date_time=True):
     """Parses the context of files in file_list
 
     :file_regex: a list of files whose contents should be parsed
@@ -21,8 +22,9 @@ def parse_files(file_list):
     all_data_frames = (pd.read_csv(f, header=0) for f in file_list)
     merged_data = pd.concat((all_data_frames))
 
-    for col in DATE_COLUMNS:
-        merged_data[col] = pd.to_datetime(merged_data[col])
+    if convert_date_time:
+        for col in DATE_COLUMNS:
+            merged_data[col] = pd.to_datetime(merged_data[col])
 
     return merged_data
 
@@ -65,7 +67,11 @@ def write_to_db(dataframe, db_conn, table_name):
     dataframe.to_sql(table_name, db_conn, if_exists='append')
 
 
-def parse_files_and_write_to_db(file_regex, db_conn, table_name, chunk_size=5):
+def parse_files_and_write_to_db(file_regex,
+                                db_conn,
+                                table_name,
+                                chunk_size=5,
+                                convert_date_time=True):
     """
     Parses the given files and writes them to a table in a database.
 
@@ -74,6 +80,8 @@ def parse_files_and_write_to_db(file_regex, db_conn, table_name, chunk_size=5):
     :db_conn: The database connection object
     :table_name: The name of the table to which we will write
     :chunk_size: The number of files to write to the db at once
+    :convert_date_time: Whether or not to attempt to convert certain columns
+        to datetimes
     """
     empty_table(db_conn, table_name)
 
@@ -81,22 +89,27 @@ def parse_files_and_write_to_db(file_regex, db_conn, table_name, chunk_size=5):
     num_chunks = ceil(len(matching_files)/chunk_size)
     with tqdm(total=num_chunks) as pbar:
         for chunk in chunk_iter(matching_files, chunk_size):
-            all_data = parse_files(chunk)
+            all_data = parse_files(chunk, convert_date_time)
             write_to_db(all_data, db_conn, table_name)
             pbar.update(1)
 
 
-def main(file_regex):
+def main(file_regex, lookup_table_path):
     """Calls parse_files_and_write_to_db.
 
     :file_regex: The regex containing the files to parse.
+    :lookup_table_path: The path to the file containing the location lookup
+        table
     """
     table_name = 'rides'
     db_conn = sqlite3.connect('rides.db')
     parse_files_and_write_to_db(file_regex, db_conn, table_name)
+    table_name = 'locations'
+    parse_files_and_write_to_db(lookup_table_path, db_conn, table_name, convert_date_time=False)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        sys.exit('Please supply a path to files to parse')
-    main(sys.argv[1])
+    if len(sys.argv) != 3:
+        sys.exit('Please supply a path to files to parse '
+                 'and the path to the lookup table')
+    main(sys.argv[1], sys.argv[2])
