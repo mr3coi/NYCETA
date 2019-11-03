@@ -1,15 +1,29 @@
 """ Contains code to read CSV files containing taxi data """
-import sys
 from math import ceil
 from glob import glob
 import sqlite3
 import pandas as pd
 from tqdm import tqdm
+import argparse
 
 DATE_COLUMNS = [
     'tpep_pickup_datetime',
     'tpep_dropoff_datetime'
     ]
+
+PARSER = argparse.ArgumentParser(description='Parse TaxiData CSVs to SQL')
+PARSER.add_argument('--rebuild_rides_table',
+                    help='Whether or not to rebuild the rides table. '
+                         'Requires argument: string containing regex matching '
+                         'rides CSVs to parse'
+                   )
+
+PARSER.add_argument('--rebuild_locations_table',
+                    help='Whether or not to rebuild the locations table. '
+                         'Requires argument: string containing path to '
+                         'locations CSV'
+                   )
+
 
 
 def parse_files(file_list, convert_date_time=True):
@@ -94,22 +108,27 @@ def parse_files_and_write_to_db(file_regex,
             pbar.update(1)
 
 
-def main(file_regex, lookup_table_path):
-    """Calls parse_files_and_write_to_db.
+def main():
+    """Handles args and calls parse_files_and_write_to_db.
 
-    :file_regex: The regex containing the files to parse.
-    :lookup_table_path: The path to the file containing the location lookup
-        table
     """
-    table_name = 'rides'
     db_conn = sqlite3.connect('rides.db')
-    parse_files_and_write_to_db(file_regex, db_conn, table_name)
-    table_name = 'locations'
-    parse_files_and_write_to_db(lookup_table_path, db_conn, table_name, convert_date_time=False)
+
+    provided_args = PARSER.parse_args()
+
+    if provided_args.rebuild_rides_table:
+        table_name = 'rides'
+        parse_files_and_write_to_db(provided_args.rebuild_rides_table,
+                                    db_conn,
+                                    table_name)
+
+    if provided_args.rebuild_locations_table:
+        table_name = 'locations'
+        parse_files_and_write_to_db(provided_args.rebuild_locations_table,
+                                    db_conn,
+                                    table_name,
+                                    convert_date_time=False)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        sys.exit('Please supply a path to files to parse '
-                 'and the path to the lookup table')
-    main(sys.argv[1], sys.argv[2])
+    main()
