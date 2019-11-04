@@ -106,3 +106,4 @@ venv.bak/
 # Taxi data
 TaxiData/
 rides.db
+*.geojson
