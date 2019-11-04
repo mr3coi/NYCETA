@@ -4,9 +4,9 @@ from glob import glob
 import sqlite3
 import argparse
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 import geojson
-import numpy as np
 
 DATE_COLUMNS = [
     'tpep_pickup_datetime',
@@ -99,16 +99,19 @@ def parse_geo_json(file_path):
     """
     with open(file_path[0]) as opened_file:
         loaded_geojson = geojson.loads(opened_file.read())
-        print(loaded_geojson['type'])
+        all_data = []
         for zone in loaded_geojson['features']:
             location_id = zone['properties']['location_id']
             coordinates = np.array(list(geojson.utils.coords(zone)))
 
-            # Parsing sometimes adds useless dimensions for some reason.
-            # Remove them.
+            # Approximate center of zone by finding center of bounding
+            # lat/long rectangle
             maxes = np.max(coordinates, axis=0)
             mins = np.min(coordinates, axis=0)
-            mean_lat, mean_long = maxes + mins / 2
+            mean_lat, mean_long = (maxes + mins) / 2
+
+            all_data.append([location_id, mean_lat, mean_long])
+    return pd.DataFrame(all_data, columns=['LocationID', 'lat', 'long'])
 
 
 def parse_files_and_write_to_db(file_regex,
@@ -116,7 +119,7 @@ def parse_files_and_write_to_db(file_regex,
                                 table_name,
                                 chunk_size=5,
                                 convert_date_time=True,
-                                geojson=False):
+                                parse_as_geojson=False):
     """
     Parses the given files and writes them to a table in a database.
 
@@ -127,7 +130,7 @@ def parse_files_and_write_to_db(file_regex,
     :chunk_size: The number of files to write to the db at once
     :convert_date_time: Whether or not to attempt to convert certain columns
         to datetimes
-    :geojson: Whether or not to parse file_regex as geojson files
+    :parse_as_geojson: Whether or not to parse file_regex as geojson files
     """
     empty_table(db_conn, table_name)
 
@@ -135,10 +138,10 @@ def parse_files_and_write_to_db(file_regex,
     num_chunks = ceil(len(matching_files)/chunk_size)
     with tqdm(total=num_chunks) as pbar:
         for chunk in chunk_iter(matching_files, chunk_size):
-            if not geojson:
-                all_data = parse_files(chunk, convert_date_time)
-            else:
+            if parse_as_geojson:
                 all_data = parse_geo_json(chunk)
+            else:
+                all_data = parse_files(chunk, convert_date_time)
             write_to_db(all_data, db_conn, table_name)
             pbar.update(1)
 
