@@ -186,7 +186,11 @@ def extract_random_data_features(conn, table_name, random_size):
     """
     cursor = conn.cursor()
 
-    command = f'SELECT tpep_pickup_datetime, tpep_dropoff_datetime, PULocationID, DOLocationID FROM {table_name} ORDER BY RANDOM() LIMIT {random_size}'
+    command = ('SELECT tpep_pickup_datetime, tpep_dropoff_datetime, '
+               'PULocationID, DOLocationID '
+               f'FROM {table_name} '
+               'ORDER BY RANDOM() '
+               f'LIMIT {random_size}')
     print('Reading data entries from the table in the database')
     try:
         cursor.execute(command)
