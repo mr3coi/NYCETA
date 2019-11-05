@@ -202,7 +202,7 @@ def extract_features(conn, table_name, variant='all', random_size=None):
 
     :conn: connection object to the database
     :table_name: name of the table holding the data
-    :variant: which typr of variant ot choose for extracting data
+    :variant: which type of variant to choose for extracting data
         Must be one out of
             - all : extracts features from all the data
             - random : uses a random batch of data from the db
