@@ -173,7 +173,7 @@ def main():
                                     db_conn,
                                     table_name,
                                     convert_date_time=False,
-                                    geojson=True)
+                                    parse_as_geojson=True)
 
 
 
