@@ -144,7 +144,11 @@ def extract_all_features(conn, table_name):
     stop_condition = False
     while True:
         print("Reading data for batch number {}".format(batch_num))
-        command = f'SELECT tpep_pickup_datetime, tpep_dropoff_datetime, PULocationID, DOLocationID FROM {table_name} LIMIT {limit} OFFSET {offset}'
+        command = ('SELECT tpep_pickup_datetime, tpep_dropoff_datetime, '
+                   'PULocationID, DOLocationID '
+                   f'FROM {table_name} '
+                   f'LIMIT {limit} '
+                   f'OFFSET {offset}')
         
         try:
             cursor.execute(command)
