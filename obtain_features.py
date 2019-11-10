@@ -1,35 +1,10 @@
 # pragma pylint: disable=C0103, C0303
 import sqlite3
-from sqlite3 import Error
 import sys
 import datetime
 import numpy as np
 from scipy import sparse
-
-
-def create_connection(db_file):
-    """ create a database connection to the SQLite database
-        specified by the db_file
-    :param db_file: database file
-    :return: Connection object or None
-    """
-    conn = None
-    try:
-        conn = sqlite3.connect(db_file)
-    except Error as error:
-        print(error)
-    return conn
-
-
-def get_db_description(conn):
-    """Obtain the description of tables
-    and columns in the database
-
-    :conn: connection object to the database
-	"""
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM sqlite_master WHERE type='table';")
-    print(cursor.fetchall())
+from utils import create_connection
 
 
 def get_one_hot(values, min_val, max_val):
@@ -64,14 +39,17 @@ def parse_datetime(datetime_strs):
     
     dates = [int(i[2]) for i in date_list]
     months = [int(i[1]) for i in date_list]
-    # The year information has been ignored
+    # The year information will only be used to get the day of the week
+    years = [int(i[0]) for i in date_list]
+    weekdays = [datetime.date(years[i], months[i], dates[i]).weekday \
+        for i in range(len(date_list))]
 
     time_list = [i.split(":") for i in times]
     hours = [int(i[0]) for i in time_list]
     minutes = [int(i[1]) for i in time_list]
     seconds = [int(i[2]) for i in time_list]
 
-    return [dates, months, hours, minutes, seconds]
+    return [dates, months, hours, minutes, seconds, weekdays]
 
 
 def obtain_date_time_features(datetime_lists):
@@ -85,13 +63,14 @@ def obtain_date_time_features(datetime_lists):
     """
     dates = get_one_hot(datetime_lists[0], 1, 31)
     months = get_one_hot(datetime_lists[1], 1, 12)
-    # The year information has been ignored
 
     hours = get_one_hot(datetime_lists[2], 0, 23)
     minutes = get_one_hot(datetime_lists[3], 0, 59)
     seconds = get_one_hot(datetime_lists[4], 0, 59)
-   
-    features = sparse.hstack([dates, months, hours, minutes, seconds])
+    
+    weekdays = get_one_hot(datetime_lists[5], 0, 6)
+
+    features = sparse.hstack([dates, months, hours, minutes, seconds, weekdays])
     return features
 
 
@@ -152,7 +131,7 @@ def extract_all_features(conn, table_name):
         
         try:
             cursor.execute(command)
-        except Error as e:
+        except sqlite3.Error as e:
             print(e)
             stop_condition = True
         if stop_condition:
@@ -241,6 +220,6 @@ if __name__ == "__main__":
     db_name = "rides.db" 
     con = create_connection(db_name)   
     # We have a total of 67302302 entries in the rides table 
-    f, o = extract_features(con, "rides", variant='all', random_size=10)
-    print(f.shape)
-    print(o.shape)
+    features_, outputs_ = extract_features(con, "rides", variant='all', random_size=10)
+    print(features_.shape)
+    print(outputs_.shape)
