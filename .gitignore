@@ -111,3 +111,4 @@ venv.bak/
 TaxiData/
 rides.db
 *.geojson
+*_curves.png
