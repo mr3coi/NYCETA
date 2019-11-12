@@ -70,7 +70,7 @@ def obtain_date_time_features(datetime_lists):
     
     weekdays = get_one_hot(datetime_lists[5], 0, 6)
 
-    features = sparse.hstack([dates, months, hours, minutes, seconds, weekdays])
+    features = sparse.hstack([dates, months, hours, minutes, seconds, weekdays], format="csr")
     return features
 
 
@@ -80,7 +80,7 @@ def get_naive_features(rows, maxLocID=265):
     in the concatanted vector
 
     :rows: the rows of data obtained from the database
-    :maxLocID: the maximum possibel value of location IDs
+    :maxLocID: the maximum possible value of location IDs
     :returns: a sparse csr_matrix for the feature vectors, 
         and a np array for the time taken in seconds
     """
@@ -90,7 +90,7 @@ def get_naive_features(rows, maxLocID=265):
     PUDatetime = obtain_date_time_features(p_datetime)
     PULocID = get_one_hot(list(map(int, rows[:, 2])), 1, maxLocID)
     DOLocID = get_one_hot(list(map(int, rows[:, 3])), 1, maxLocID)
-    feature_vectors = sparse.hstack([PUDatetime, PULocID, DOLocID])
+    feature_vectors = sparse.hstack([PUDatetime, PULocID, DOLocID], format="csr")
     
     delta = np.array([datetime.timedelta(
         days=d_datetime[0][i]-p_datetime[0][i],
@@ -99,7 +99,7 @@ def get_naive_features(rows, maxLocID=265):
         seconds=d_datetime[4][i]-p_datetime[4][i]
     ) for i in range(rows.shape[0])])
 
-    time_taken = [i.seconds for i in delta]
+    time_taken = np.array([i.seconds for i in delta])
     
     return feature_vectors, time_taken
 
@@ -144,7 +144,7 @@ def extract_all_features(conn, table_name):
             features, outputs = get_naive_features(rows)
         else:
             features_sample, outputs_sample = get_naive_features(rows) 
-            features = sparse.vstack([features, features_sample])
+            features = sparse.vstack([features, features_sample], format="csr")
             outputs = np.concatenate((outputs, outputs_sample))
 
         batch_num += 1
@@ -173,7 +173,7 @@ def extract_random_data_features(conn, table_name, random_size):
     print('Reading data entries from the table in the database')
     try:
         cursor.execute(command)
-    except Error as e:
+    except sqlite3.Error as e:
         print(e)
 
     rows = np.array(cursor.fetchall())
