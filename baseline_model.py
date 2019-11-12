@@ -4,6 +4,7 @@ import argparse
 from sklearn import ensemble
 from sklearn.utils import shuffle
 from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
 
 from obtain_features import *
 
@@ -17,6 +18,37 @@ parser.add_argument('-r', '--rand-subset', type=int, default=0,
 						 "Size 0 means the whole dataset is used (i.e. variant=all).")
 parser.add_argument('-v', '--verbose', action='store_true',
 					help="Let the model print training progress (if supported)")
+
+
+def create_plot(stats, save=True):
+	"""Create the following plots:
+		- Training & validation losses per iteration
+		- (if available) Training & validation criterion values per iteration
+
+	:save: Whether to save the plot with name '{model_name}_curves.png'.
+		If False, then views the plot instead.
+	"""
+	fig = plt.figure()
+	if stats['val_losses'] is not None:
+		ax1 = fig.add_subplot(1,2,1)
+		ax1.plot(np.arange(len(stats['val_losses'])) + 1, stats['val_losses'], label='val_loss')
+		ax1.set_xlabel('# Trees')
+		ax1.set_ylabel('Validation loss')
+		ax1.legend()
+
+	if stats['val_criterion'] is not None:
+		ax2 = fig.add_subplot(1,2,2)
+		ax2.plot(np.arange(len(stats['val_criterion'])) + 1, stats['val_criterion'], 'r-', label='val_criterion')
+		ax2.set_xlabel('# Trees')
+		ax2.set_ylabel('Criterion')
+		if stats['train_criterion'] is not None:
+			ax2.plot(np.arange(len(stats['train_criterion'])) + 1, stats['train_criterion'], 'b-', label='train_criterion')
+		ax2.legend()
+
+	if save:
+		plt.savefig(fname=parsed_args.model + "_curves")
+	else:
+		plt.show()
 
 
 def shuffle_sep_train_val(features, outputs, val_ratio=0.1, shuffle=True, seed=None):
@@ -101,6 +133,7 @@ def main():
 		pass
 
 	print(f"Validation set MSE = {result['val_loss']}")
+	create_plot(result)
 		
 	conn.close()
 
