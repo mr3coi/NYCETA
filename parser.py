@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import geojson
+import bridge_info
 
 DATE_COLUMNS = [
     'tpep_pickup_datetime',
@@ -30,6 +31,11 @@ PARSER.add_argument('--rebuild_coordinates_table',
                     help='Whether or not to rebuild the coordinates table. '
                          'Requires argument: string containing path to '
                          'geojson file containing zone info'
+                   )
+
+PARSER.add_argument('--rebuild_bridges_table',
+                    action='store_true',
+                    help='Whether or not to rebuild the bridges table. '
                    )
 
 
@@ -145,6 +151,15 @@ def parse_files_and_write_to_db(file_regex,
             write_to_db(all_data, db_conn, table_name)
             pbar.update(1)
 
+def parse_bridge_info():
+    """Parses info about bridge from bridge_info into a pandas dataframe.
+
+    :returns: a pandas dataframe with two columns, LocationID1 and LocationID2,
+    representing the two endpoints of a crossing point between boros.
+    """
+
+    return pd.DataFrame(bridge_info.BRIDGES, columns=['LocationID1', 'LocationID2'])
+
 
 def main():
     """Handles args and calls parse_files_and_write_to_db.
@@ -174,6 +189,11 @@ def main():
                                     table_name,
                                     convert_date_time=False,
                                     parse_as_geojson=True)
+
+    if provided_args.rebuild_bridges_table:
+        table_name = 'bridges'
+        bridge_info = parse_bridge_info()
+        write_to_db(bridge_info, db_conn, table_name)
 
 
 
