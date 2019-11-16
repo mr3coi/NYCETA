@@ -60,13 +60,14 @@ def write_log(logpath, args, result):
 
         for tree_idx in range(args.num_trees):
             log.write(f"[Iter #{tree_idx:4d}] ")
-            if result.val_losses is not None:
-                log.write(f"val_loss = {val_losses[tree_idx]}")
-            if result.train_criterion is not None:
-                log.write(f"train_obj = {train_criterion[tree_idx]}")
-            if result.val_criterion is not None:
-                log.write(f"val_obj = {val_criterion[tree_idx]}")
+            if result["val_losses"] is not None:
+                log.write(f"val_loss = {result['val_losses'][tree_idx]}")
+            if result["train_criterion"] is not None:
+                log.write(f"train_obj = {result['train_criterion'][tree_idx]}")
+            if result["val_criterion"] is not None:
+                log.write(f"val_obj = {result['val_criterion'][tree_idx]}")
             log.write("\n")
+        log.write(f"Final validation loss: {result['val_loss']}")
 
 
 def create_plot(stats, save=True):
