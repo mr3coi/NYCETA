@@ -4,7 +4,11 @@ import argparse
 from sklearn import ensemble
 from sklearn.utils import shuffle
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import ShuffleSplit
 import matplotlib.pyplot as plt
+import xgboost as xgb
+import sys
+from time import time
 
 from obtain_features import *
 
@@ -15,10 +19,17 @@ parser.add_argument('--db-path', type=str, default="./rides.db",
 					help="Path to the sqlite3 database file.")
 parser.add_argument('-r', '--rand-subset', type=int, default=0,
 					help="Shuffle the dataset, then sample a subset with size specified by argument (default: 0). "
-						 "Size 0 means the whole dataset is used (i.e. variant=all).")
+						 "Size 0 means the whole dataset is used (i.e. variant=all)")
+parser.add_argument('--batch-size', type=int,
+					help="Batch size for semi-random batch learning")
+parser.add_argument('--block-size', type=int, default=1000,
+					help="Block size for semi-random batch learning")
+parser.add_argument('--num-trees', type=int, default=100,
+					help="Number of trees (iterations) to train")
 parser.add_argument('-v', '--verbose', action='store_true',
 					help="Let the model print training progress (if supported)")
-
+parser.add_argument('-lr', '--learning-rate', type=float, default=0.1,
+					help="The learning rate to train the model with")
 
 def create_plot(stats, save=True):
 	"""Create the following plots:
@@ -117,23 +128,86 @@ def gbrt(features, outputs, loss_fn='LSE', lr=1, num_trees=100, verbose=True, is
 	return result
 
 
+def xgboost(batch_gen, loss_fn='LSE', lr=0.1, num_trees=100, verbose=True):
+	loss = {'LSE': 'rmse'}[loss_fn]
+	params = {
+		'objective': 'reg:squarederror',
+		'eta': lr,
+		'eval_metric': loss,
+		#'updater': 'refresh',
+		#'process_type': 'update',
+		#'refresh_leaf': True,
+		'verbosity': 2 if verbose else 1,
+	}
+
+	xgb_regressor = None
+	val_features = None
+	val_outputs = None
+	splitter = ShuffleSplit(n_splits=1, test_size=0.1, random_state=10701)
+
+	val_losses = []
+
+	for batch_idx, (features, outputs) in enumerate(batch_gen):
+		if verbose:
+			print(f"Training on batch {batch_idx+1}")
+
+		for train_idxs, val_idxs in splitter.split(X=features, y=outputs):
+			train_data = xgb.DMatrix(features[train_idxs], label=outputs[train_idxs])
+
+			if batch_idx == 0:
+				val_features = features[val_idxs]
+				val_outputs = outputs[val_idxs]
+			else:
+				val_features = sparse.vstack([val_features, features[val_idxs]], format="csr")
+				val_outputs = np.concatenate([val_outputs, outputs[val_idxs]])
+
+		xgb_regressor = xgb.train(params=params,
+								  dtrain = train_data,
+								  num_boost_round = num_trees,
+								  xgb_model = xgb_regressor,
+								  )
+
+		val_input = xgb.DMatrix(val_features)
+		y_pred = xgb_regressor.predict(data=val_input)
+		loss_value = mean_squared_error(val_outputs, y_pred)
+		val_losses.append(loss_value)
+
+	result = {
+		'val_loss':		val_losses[-1],
+		'val_losses':	val_losses,
+	}
+	return result
+
+
 def main():
 	parsed_args = parser.parse_args()
 	conn = create_connection(parsed_args.db_path)
-	features, outputs = extract_features(conn,
-										 table_name = 'rides',
-										 variant = 'random' if parsed_args.rand_subset > 0 else 'all',
-										 random_size = parsed_args.rand_subset)
 
-	if parsed_args.model is "gbrt":
+	if parsed_args.model == "gbrt":
+		features, outputs = extract_features(conn,
+											 table_name = 'rides',
+											 variant = 'random' if parsed_args.rand_subset > 0 else 'all',
+											 size = parsed_args.rand_subset)
 		result = gbrt(features, outputs, verbose=parsed_args.verbose, is_shuffled=(parsed_args.rand_subset > 0))
-	elif parsed_args.model is "xgboost":
-		pass
-	elif parsed_args.model is "lightgbm":
+	elif parsed_args.model == "xgboost":
+		if parsed_args.batch_size is None:
+			sys.exit("Please provide a valid batch size.")
+		batch_generator = extract_features(conn,
+										   table_name = 'rides',
+										   variant = 'batch',
+										   size = parsed_args.batch_size,
+										   block_size = parsed_args.block_size)
+		result = xgboost(batch_generator,
+						 lr = parsed_args.learning_rate,
+						 num_trees = parsed_args.num_trees,
+						 verbose = parsed_args.verbose,
+						)
+	elif parsed_args.model == "lightgbm":
 		pass
 
 	print(f"Validation set MSE = {result['val_loss']}")
-	create_plot(result)
+	if result['val_losses'] is not None:
+		create_plot(result)
 		
 	conn.close()
 
