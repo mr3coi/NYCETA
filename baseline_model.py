@@ -7,8 +7,10 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import ShuffleSplit
 import matplotlib.pyplot as plt
 import xgboost as xgb
+
 import sys
 from time import time
+import os
 
 from obtain_features import *
 
@@ -30,6 +32,42 @@ parser.add_argument('-v', '--verbose', action='store_true',
 					help="Let the model print training progress (if supported)")
 parser.add_argument('-lr', '--learning-rate', type=float, default=0.1,
 					help="The learning rate to train the model with")
+parser.add_argument('--log', action='store_true',
+                    help="Record training log into a text file "
+                         "(default location: 'NYCETA/logs')")
+
+
+def log_dir(dirname="logs"):
+	'''Creates a directory in project root directory
+	to store training logs, unless already exists.
+
+	:dirname: the name of the directory
+	:returns: the path to the directory
+	'''
+	log_path = os.path.join(os.getcwd(),dirname)
+	try:
+		os.mkdir(log_path)
+	except OSError:
+		pass
+	return log_path
+
+def write_log(logpath, args, result):
+    with open(log_dir(), 'w') as log:
+        log.write(f"model: {args.model}, num_trees: {args.num_trees}, learning_rate: {args.learning_rate}\n"
+                  f"batch_size: {args.batch_size}, block_size: {args.block_size}, "
+                  f"num_batch: {'full' if args.num_batch is None else args.num_batch}}\n"
+                  "\n")
+
+        for tree_idx in range(args.num_trees):
+            log.write(f"[Iter #{tree_idx:4d}] ")
+            if result.val_losses is not None:
+                log.write(f"val_loss = {val_losses[tree_idx]}")
+            if result.train_criterion is not None:
+                log.write(f"train_obj = {train_criterion[tree_idx]}")
+            if result.val_criterion is not None:
+                log.write(f"val_obj = {val_criterion[tree_idx]}")
+            log.write("\n")
+
 
 def create_plot(stats, save=True):
 	"""Create the following plots:
@@ -204,6 +242,9 @@ def main():
 						)
 	elif parsed_args.model == "lightgbm":
 		pass
+
+    if parsed_args.log:
+        write_log(log_dir(), parsed_args, result)
 
 	print(f"Validation set MSE = {result['val_loss']}")
 	if result['val_losses'] is not None:

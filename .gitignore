@@ -112,3 +112,4 @@ TaxiData/
 rides.db
 *.geojson
 *_curves.png
+logs/
