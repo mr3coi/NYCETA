@@ -204,6 +204,8 @@ def extract_batch_features(conn, table_name, batch_size, block_size, replace_blk
     """
     cursor = conn.cursor()
 
+    if verbose:
+        count_start = time()
     count_cmd = (f'SELECT COUNT(PULocationID) FROM {table_name} ')
     try:
         cursor.execute(count_cmd)
@@ -235,17 +237,25 @@ def extract_batch_features(conn, table_name, batch_size, block_size, replace_blk
                        f'FROM {table_name} '
                        f'LIMIT {block_size} '
                        f'OFFSET {blk_idx * block_size}')
+            query_start = time()
             try:
                 cursor.execute(command)
             except Error as e:
                 print(e)
 
             rows = np.array(cursor.fetchall())
+            if verbose:
+                print(f">>> Time taken for query: {time() - query_start} seconds")
 
+            preproc_start = time()
             if i == 0:
                 features, outputs = get_naive_features(rows)
+                if verbose:
+                    print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
             else:
                 features_sample, outputs_sample = get_naive_features(rows)
+                if verbose:
+                    print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
                 features = sparse.vstack([features, features_sample], format="csr")
                 outputs = np.concatenate((outputs, outputs_sample))
 
