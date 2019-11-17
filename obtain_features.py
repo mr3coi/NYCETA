@@ -41,7 +41,7 @@ def parse_datetime(datetime_strs):
     months = [int(i[1]) for i in date_list]
     # The year information will only be used to get the day of the week
     years = [int(i[0]) for i in date_list]
-    weekdays = [datetime.date(years[i], months[i], dates[i]).weekday \
+    weekdays = [datetime.date(years[i], months[i], dates[i]).weekday() \
         for i in range(len(date_list))]
 
     time_list = [i.split(":") for i in times]
@@ -137,7 +137,9 @@ def extract_all_features(conn, table_name):
         if stop_condition:
             break
         
-        rows = np.array(cursor.fetchall())  
+        rows = np.array(cursor.fetchall())
+        if rows.shape[0] == 0:
+            break
 
         print("Extracting features from the read data")
         if offset == 0:
