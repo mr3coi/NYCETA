@@ -237,24 +237,17 @@ def xgboost(features, outputs, lr=0.1, num_trees=100, verbose=True):
 
 	model = xgb.XGBRegressor(**params)
 	model.fit(f_train, o_train,
-			  #eval_set = [(f,o) for f, o in zip(f_val, o_val)],
-			  eval_set = [(f_val, o_val)],
+			  eval_set = [(f_train,o_train), (f_val, o_val)],
 			  eval_metric = 'rmse',
 			  verbose=verbose)
 
-    if verbose:
-        print(">>> Model training complete")
+	if verbose:
+		print(">>> Model training complete")
 
-	val_losses = np.zeros(num_trees, dtype=np.float64)
-	train_losses = np.zeros(num_trees, dtype=np.float64)
-	for it in range(num_trees):
-        if verbose and (it+1) % 10 == 0:
-            print(f">>> Computing validation error on submodel with {it+1} trees")
-		y_pred_val = model.predict(data=f_val, ntree_limit=it+1)
-		val_losses[it] = np.sqrt(mean_squared_error(o_val, y_pred_val))
+	evals_result = model.evals_result()
 
-		y_pred_train = model.predict(data=f_train, ntree_limit=it+1)
-		train_losses[it] = np.sqrt(mean_squared_error(o_train, y_pred_train))
+	train_losses = evals_result['validation_0']['rmse'] # 1st arg in `eval_set`
+	val_losses   = evals_result['validation_1']['rmse'] # 2nd arg in `eval_set`
 
 	result = {
 		'val_loss':		val_losses[-1],
