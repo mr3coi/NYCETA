@@ -52,25 +52,26 @@ def log_dir(dirname="logs"):
 	return log_path
 
 def write_log(logpath, args, result):
-    with open(log_dir(), 'w') as log:
-        log.write(f"model: {args.model}, num_trees: {args.num_trees}, learning_rate: {args.learning_rate}\n"
-                  f"batch_size: {args.batch_size}, block_size: {args.block_size}, "
-                  f"num_batch: {'full' if args.num_batch is None else args.num_batch}}\n"
-                  "\n")
+	log_addr = os.path.join(log_dir(), f'log_{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.txt')
+	with open(log_addr, 'w') as log:
+		log.write(f"model: {args.model}, num_trees: {args.num_trees}, learning_rate: {args.learning_rate}\n"
+				  f"batch_size: {args.batch_size}, block_size: {args.block_size}, "
+				  f"num_batch: {'full' if args.num_batch is None else args.num_batch}\n"
+				  "\n")
 
-        for tree_idx in range(args.num_trees):
-            log.write(f"[Iter #{tree_idx:4d}] ")
-            if result["val_losses"] is not None:
-                log.write(f"val_loss = {result['val_losses'][tree_idx]}")
-            if result["train_criterion"] is not None:
-                log.write(f"train_obj = {result['train_criterion'][tree_idx]}")
-            if result["val_criterion"] is not None:
-                log.write(f"val_obj = {result['val_criterion'][tree_idx]}")
-            log.write("\n")
-        log.write(f"Final validation loss: {result['val_loss']}")
+		for tree_idx in range(args.num_trees):
+			log.write(f"[Iter #{tree_idx:4d}] ")
+			if result["val_losses"] is not None:
+				log.write(f"val_loss = {result['val_losses'][tree_idx]}")
+			if result["train_criterion"] is not None:
+				log.write(f"train_obj = {result['train_criterion'][tree_idx]}")
+			if result["val_criterion"] is not None:
+				log.write(f"val_obj = {result['val_criterion'][tree_idx]}")
+			log.write("\n")
+		log.write(f"Final validation loss: {result['val_loss']}")
 
 
-def create_plot(stats, save=True):
+def create_plot(stats, model_name, save=True):
 	"""Create the following plots:
 		- Training & validation losses per iteration
 		- (if available) Training & validation criterion values per iteration
@@ -79,24 +80,26 @@ def create_plot(stats, save=True):
 		If False, then views the plot instead.
 	"""
 	fig = plt.figure()
-	if stats['val_losses'] is not None:
+	if 'val_losses' in stats.keys():
 		ax1 = fig.add_subplot(1,2,1)
 		ax1.plot(np.arange(len(stats['val_losses'])) + 1, stats['val_losses'], label='val_loss')
+		if 'train_losses' in stats.keys():
+			ax1.plot(np.arange(len(stats['train_losses'])) + 1, stats['train_losses'], label='train_loss')
 		ax1.set_xlabel('# Trees')
-		ax1.set_ylabel('Validation loss')
+		ax1.set_ylabel('Loss')
 		ax1.legend()
 
-	if stats['val_criterion'] is not None:
+	if 'val_criterion' in stats.keys():
 		ax2 = fig.add_subplot(1,2,2)
 		ax2.plot(np.arange(len(stats['val_criterion'])) + 1, stats['val_criterion'], 'r-', label='val_criterion')
 		ax2.set_xlabel('# Trees')
 		ax2.set_ylabel('Criterion')
-		if stats['train_criterion'] is not None:
+		if 'train_criterion' in stats.keys():
 			ax2.plot(np.arange(len(stats['train_criterion'])) + 1, stats['train_criterion'], 'b-', label='train_criterion')
 		ax2.legend()
 
 	if save:
-		plt.savefig(fname=parsed_args.model + "_curves")
+		plt.savefig(fname=model_name + "_curves")
 	else:
 		plt.show()
 
@@ -244,12 +247,12 @@ def main():
 	elif parsed_args.model == "lightgbm":
 		pass
 
-    if parsed_args.log:
-        write_log(log_dir(), parsed_args, result)
+	if parsed_args.log:
+		write_log(log_dir(), parsed_args, result)
 
 	print(f"Validation set MSE = {result['val_loss']}")
 	if result['val_losses'] is not None:
-		create_plot(result)
+		create_plot(result, parsed_args.model)
 		
 	conn.close()
 
