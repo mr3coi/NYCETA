@@ -11,7 +11,8 @@ import xgboost as xgb
 import sys
 from time import time
 import os
-from datetime import datetime
+from datetime import datetime as dt
+from pytz import timezone
 
 from obtain_features import *
 
@@ -24,7 +25,7 @@ parser.add_argument('--db-path', type=str, default="./rides.db",
 parser.add_argument('-r', '--rand-subset', type=int, default=0,
 					help="Shuffle the dataset, then sample a subset with size specified by argument (default: 0). "
 						 "Size 0 means the whole dataset is used (i.e. variant=all)")
-parser.add_argument('--batch-size', type=int,
+parser.add_argument('--batch-size', type=int, default=-1,
 					help="Batch size for semi-random batch learning")
 parser.add_argument('--block-size', type=int, default=1000,
 					help="Block size for semi-random batch learning")
@@ -54,23 +55,27 @@ def log_dir(dirname="logs"):
 	return log_path
 
 def write_log(logpath, args, result):
-	log_addr = os.path.join(log_dir(), f'log_{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.txt')
+	curr_time = dt.now().astimezone(timezone('US/Eastern')).strftime("%Y-%m-%d-%H-%M-%S")
+	log_addr = os.path.join(log_dir(), f'log_{curr_time}.txt')
 	with open(log_addr, 'w') as log:
-		log.write(f"model: {args.model}, num_trees: {args.num_trees}, learning_rate: {args.learning_rate}\n"
-				  f"batch_size: {args.batch_size}, block_size: {args.block_size}, "
-				  f"num_batch: {'full' if args.num_batch is None else args.num_batch}\n"
-				  "\n")
+		log.write(f"model: {args.model}, num_trees: {args.num_trees}, learning_rate: {args.learning_rate}\n")
+		if args.batch_size > 0:
+			log.write(f"batch_size: {args.batch_size}, block_size: {args.block_size}, "
+					  f"num_batch: {'full' if args.num_batch is None else args.num_batch}\n")
+		log.write("\n")
 
 		for tree_idx in range(args.num_trees):
 			log.write(f"[Iter #{tree_idx:4d}] ")
-			if result["val_losses"] is not None:
-				log.write(f"val_loss = {result['val_losses'][tree_idx]}")
-			if result["train_criterion"] is not None:
-				log.write(f"train_obj = {result['train_criterion'][tree_idx]}")
-			if result["val_criterion"] is not None:
-				log.write(f"val_obj = {result['val_criterion'][tree_idx]}")
+			if "val_losses" in result.keys():
+				log.write(f"val_loss = {result['val_losses'][tree_idx]:.4f}")
+			if "train_losses" in result.keys():
+				log.write(f", train_loss = {result['train_losses'][tree_idx]:.4f}")
+			if "val_criterion" in result.keys():
+				log.write(f", val_obj = {result['val_criterion'][tree_idx]:.4f}")
+			if "train_criterion" in result.keys():
+				log.write(f", train_obj = {result['train_criterion'][tree_idx]:.4f}")
 			log.write("\n")
-		log.write(f"Final validation loss: {result['val_loss']}")
+		log.write(f"Final validation loss: {result['val_loss']:.4f}")
 
 
 def create_plot(stats, model_name, save=True):
@@ -297,8 +302,9 @@ def main():
 	if parsed_args.log:
 		write_log(log_dir(), parsed_args, result)
 
-	print(f"Validation set MSE = {result['val_loss']}")
-	if result['val_losses'] is not None:
+	if 'val_loss' in result.keys():
+		print(f"Validation set MSE = {result['val_loss']}")
+	if 'val_losses' in result.keys():
 		create_plot(result, parsed_args.model)
 		
 	conn.close()
