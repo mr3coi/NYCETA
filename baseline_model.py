@@ -4,18 +4,20 @@ import argparse
 from sklearn import ensemble
 from sklearn.utils import shuffle
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import ShuffleSplit
+from sklearn.model_selection import ShuffleSplit, train_test_split
 import matplotlib.pyplot as plt
 import xgboost as xgb
 
 import sys
 from time import time
 import os
+from datetime import datetime
 
 from obtain_features import *
 
 parser = argparse.ArgumentParser(description="Specify baseline model to train")
-parser.add_argument('-m', "--model", type=str, choices = ["gbrt", "xgboost", "lightgbm"], default="gbrt",
+parser.add_argument('-m', "--model", type=str, default="xgboost",
+					choices = ["gbrt", "xgboost", "lightgbm","xgboost_batch"],
 					help="Choose which baseline model to train (default: gbrt)")
 parser.add_argument('--db-path', type=str, default="./rides.db",
 					help="Path to the sqlite3 database file.")
@@ -33,8 +35,8 @@ parser.add_argument('-v', '--verbose', action='store_true',
 parser.add_argument('-lr', '--learning-rate', type=float, default=0.1,
 					help="The learning rate to train the model with")
 parser.add_argument('--log', action='store_true',
-                    help="Record training log into a text file "
-                         "(default location: 'NYCETA/logs')")
+					help="Record training log into a text file "
+						 "(default location: 'NYCETA/logs')")
 
 
 def log_dir(dirname="logs"):
@@ -170,15 +172,12 @@ def gbrt(features, outputs, loss_fn='LSE', lr=1, num_trees=100, verbose=True, is
 	return result
 
 
-def xgboost(batch_gen, loss_fn='LSE', lr=0.1, num_trees=100, verbose=True):
+def xgboost_batch(batch_gen, loss_fn='LSE', lr=0.1, num_trees=100, verbose=True):
 	loss = {'LSE': 'rmse'}[loss_fn]
 	params = {
 		'objective': 'reg:squarederror',
 		'eta': lr,
 		'eval_metric': loss,
-		#'updater': 'refresh',
-		#'process_type': 'update',
-		#'refresh_leaf': True,
 		'verbosity': 2 if verbose else 1,
 	}
 
@@ -221,6 +220,44 @@ def xgboost(batch_gen, loss_fn='LSE', lr=0.1, num_trees=100, verbose=True):
 	return result
 
 
+def xgboost(features, outputs, lr=0.1, num_trees=100, verbose=True):
+	f_train, f_val, o_train, o_val = train_test_split(features, outputs, test_size=0.1, shuffle=True)
+
+	params = {
+		'n_estimators': num_trees,
+		'objective': 'reg:squarederror',
+		'learning_rate': lr,
+		'verbosity': 2 if verbose else 1,
+	}
+
+	model = xgb.XGBRegressor(**params)
+	model.fit(f_train, o_train,
+			  #eval_set = [(f,o) for f, o in zip(f_val, o_val)],
+			  eval_set = [(f_val, o_val)],
+			  eval_metric = 'rmse',
+			  verbose=verbose)
+
+    if verbose:
+        print(">>> Model training complete")
+
+	val_losses = np.zeros(num_trees, dtype=np.float64)
+	train_losses = np.zeros(num_trees, dtype=np.float64)
+	for it in range(num_trees):
+        if verbose and (it+1) % 10 == 0:
+            print(f">>> Computing validation error on submodel with {it+1} trees")
+		y_pred_val = model.predict(data=f_val, ntree_limit=it+1)
+		val_losses[it] = np.sqrt(mean_squared_error(o_val, y_pred_val))
+
+		y_pred_train = model.predict(data=f_train, ntree_limit=it+1)
+		train_losses[it] = np.sqrt(mean_squared_error(o_train, y_pred_train))
+
+	result = {
+		'val_loss':		val_losses[-1],
+		'val_losses':	val_losses,
+		'train_losses':	train_losses,
+	}
+	return result
+
 def main():
 	parsed_args = parser.parse_args()
 	conn = create_connection(parsed_args.db_path)
@@ -231,7 +268,7 @@ def main():
 											 variant = 'random' if parsed_args.rand_subset > 0 else 'all',
 											 size = parsed_args.rand_subset)
 		result = gbrt(features, outputs, verbose=parsed_args.verbose, is_shuffled=(parsed_args.rand_subset > 0))
-	elif parsed_args.model == "xgboost":
+	elif parsed_args.model == "xgboost_batch":
 		if parsed_args.batch_size is None:
 			sys.exit("Please provide a valid batch size.")
 		batch_generator = extract_features(conn,
@@ -239,7 +276,17 @@ def main():
 										   variant = 'batch',
 										   size = parsed_args.batch_size,
 										   block_size = parsed_args.block_size)
-		result = xgboost(batch_generator,
+		result = xgboost_batch(batch_generator,
+						lr = parsed_args.learning_rate,
+						num_trees = parsed_args.num_trees,
+						verbose = parsed_args.verbose,
+						)
+	elif parsed_args.model == "xgboost":
+		features, outputs = extract_features(conn,
+											 table_name = 'rides',
+											 variant = 'random' if parsed_args.rand_subset > 0 else 'all',
+											 size = parsed_args.rand_subset)
+		result = xgboost(features, outputs,
 						 lr = parsed_args.learning_rate,
 						 num_trees = parsed_args.num_trees,
 						 verbose = parsed_args.verbose,
