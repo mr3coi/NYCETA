@@ -260,6 +260,9 @@ def main():
 	parsed_args = parser.parse_args()
 	conn = create_connection(parsed_args.db_path)
 
+	if parsed_args.verbose:
+		start_time = time()
+
 	if parsed_args.model == "gbrt":
 		features, outputs = extract_features(conn,
 											 table_name = 'rides',
@@ -284,6 +287,9 @@ def main():
 											 table_name = 'rides',
 											 variant = 'random' if parsed_args.rand_subset > 0 else 'all',
 											 size = parsed_args.rand_subset)
+		if verbose:
+			data_parsed_time = time()
+			print(">>> Data parsing complete, duration: {data_parsed_time - start_time} seconds")
 		result = xgboost(features, outputs,
 						 lr = parsed_args.learning_rate,
 						 num_trees = parsed_args.num_trees,
