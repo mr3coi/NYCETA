@@ -140,7 +140,9 @@ def extract_all_features(conn, table_name):
         if stop_condition:
             break
         
-        rows = np.array(cursor.fetchall())  
+        rows = np.array(cursor.fetchall())
+        if rows.shape[0] == 0:
+            break
 
         print("Extracting features from the read data")
         if offset == 0:
