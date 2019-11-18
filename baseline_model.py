@@ -287,9 +287,9 @@ def main():
 											 table_name = 'rides',
 											 variant = 'random' if parsed_args.rand_subset > 0 else 'all',
 											 size = parsed_args.rand_subset)
-		if verbose:
+		if parsed_args.verbose:
 			data_parsed_time = time()
-			print(">>> Data parsing complete, duration: {data_parsed_time - start_time} seconds")
+			print(f">>> Data parsing complete, duration: {data_parsed_time - start_time} seconds")
 		result = xgboost(features, outputs,
 						 lr = parsed_args.learning_rate,
 						 num_trees = parsed_args.num_trees,
