@@ -4,7 +4,7 @@ import argparse
 from sklearn import ensemble
 from sklearn.utils import shuffle
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import ShuffleSplit, train_test_split
+from sklearn.model_selection import ShuffleSplit, train_test_split, GridSearchCV, StratifiedKFold
 import matplotlib.pyplot as plt
 import xgboost as xgb
 
@@ -18,7 +18,7 @@ from obtain_features import *
 
 parser = argparse.ArgumentParser(description="Specify baseline model to train")
 parser.add_argument('-m', "--model", type=str, default="xgboost",
-					choices = ["gbrt", "xgboost", "lightgbm","xgboost_batch"],
+					choices = ["gbrt", "xgboost", "lightgbm","xgboost_batch", "stc_xgboost"],
 					help="Choose which baseline model to train (default: gbrt)")
 parser.add_argument('--db-path', type=str, default="./rides.db",
 					help="Path to the sqlite3 database file.")
@@ -256,6 +256,28 @@ def xgboost(features, outputs, lr=0.1, num_trees=100, verbose=True):
 	}
 	return result
 
+def stc_xgboost(features, outputs, lr=0.1, num_trees=100, verbose=True):
+	#f_train, f_val, o_train, o_val = train_test_split(features, outputs, test_size=0.1, shuffle=True)
+
+	params = {
+		'n_estimators': num_trees,
+		'objective': 'reg:squarederror',
+		'learning_rate': lr,
+		'verbosity': 2 if verbose else 1,
+	}
+
+	model = xgb.XGBRegressor(**params)
+
+	subsample = np.linspace(0.1,1,10)
+	param_grid = {'subsample': subsample}
+	kfold = StratifiedKFold(n_splits=10, shuffle=True)
+	grid_search = GridSearchCV(model, param_grid,
+							   scoring='neg_mean_squared_error', n_jobs=-1, cv=kfold,
+							   verbose=2 if verbose else 1, return_train_score=True)
+	search = grid_search.fit(features, outputs)
+
+	return search.cv_results_
+
 def main():
 	parsed_args = parser.parse_args()
 	conn = create_connection(parsed_args.db_path)
@@ -295,6 +317,23 @@ def main():
 						 num_trees = parsed_args.num_trees,
 						 verbose = parsed_args.verbose,
 						)
+	elif parsed_args.model == "stc_xgboost":
+		features, outputs = extract_features(conn,
+											 table_name = 'rides',
+											 variant = 'random' if parsed_args.rand_subset > 0 else 'all',
+											 size = parsed_args.rand_subset)
+		if parsed_args.verbose:
+			data_parsed_time = time()
+			print(f">>> Data parsing complete, duration: {data_parsed_time - start_time} seconds")
+		result = stc_xgboost(features, outputs,
+							 lr = parsed_args.learning_rate,
+							 num_trees = parsed_args.num_trees,
+							 verbose = parsed_args.verbose,
+							)
+		print(result)
+		np.save('./cv_result.npy', result)
+		conn.close()
+		return
 	elif parsed_args.model == "lightgbm":
 		pass
 
