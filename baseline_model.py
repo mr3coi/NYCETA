@@ -113,7 +113,7 @@ def create_plot(stats, model_name, save=True):
     """
     fig = plt.figure()
     if "val_losses" in stats.keys():
-        ax1 = fig.add_subplot(1,2,1)
+        ax1 = fig.add_subplot(1, 2, 1)
         ax1.plot(np.arange(len(stats["val_losses"])) + 1,
                  stats["val_losses"],
                  label="val_loss")
@@ -126,7 +126,7 @@ def create_plot(stats, model_name, save=True):
         ax1.legend()
 
     if "val_objective" in stats.keys():
-        ax2 = fig.add_subplot(1,2,2)
+        ax2 = fig.add_subplot(1, 2, 2)
         ax2.plot(np.arange(len(stats["val_objective"])) + 1,
                  stats["val_objective"],
                  "r-",
