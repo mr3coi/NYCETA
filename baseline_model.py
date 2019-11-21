@@ -72,10 +72,11 @@ def write_log(args, stats, dirname="logs"):
 	curr_time = dt.now().astimezone(timezone('US/Eastern')).strftime("%Y-%m-%d-%H-%M-%S")
 	log_addr = os.path.join(log_dir(dirname), f'log_{curr_time}.txt')
 	with open(log_addr, 'w') as log:
-		log.write(f"model: {args.model}, num_trees: {args.num_trees}, learning_rate: {args.learning_rate}\n")
+		log.write(f"model: {args.model}, num_trees: {args.num_trees}, max_depth: {args.max_depth}\n")
 		if args.batch_size > 0:
 			log.write(f"batch_size: {args.batch_size}, block_size: {args.block_size}, "
 					  f"num_batch: {'full' if args.num_batch is None else args.num_batch}\n")
+		log.write(f"subsampling_rate: {args.subsampling_rate}, learning_rate: {args.learning_rate}\n")
 		log.write("\n")
 
 		for tree_idx in range(args.num_trees):
