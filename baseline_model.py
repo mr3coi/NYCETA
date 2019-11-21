@@ -23,16 +23,22 @@ parser.add_argument('-m', "--model", type=str, default="xgboost",
 parser.add_argument('--db-path', type=str, default="./rides.db",
 					help="Path to the sqlite3 database file.")
 parser.add_argument('-r', '--rand-subset', type=int, default=0,
-					help="Shuffle the dataset, then sample a subset with size specified by argument (default: 0). "
+					help="Shuffle the dataset, then sample a subset "
+						 "with size specified by argument (default: 0). "
 						 "Size 0 means the whole dataset is used (i.e. variant=all)")
 parser.add_argument('--batch-size', type=int, default=-1,
 					help="Batch size for semi-random batch learning")
 parser.add_argument('--num-trees', type=int, default=100,
 					help="Number of trees (iterations) to train")
+parser.add_argument('--max-depth', type=int, default=3,
+					help="The maximum depth of each regression tree")
 parser.add_argument('-v', '--verbose', action='store_true',
 					help="Let the model print training progress (if supported)")
 parser.add_argument('-lr', '--learning-rate', type=float, default=0.1,
 					help="The learning rate to train the model with")
+parser.add_argument('-ssr', '--subsample-rate', type=float, default=1,
+					help="Subsampling rate for rows. "
+						 "Must be between 0 and 1.")
 parser.add_argument('--log', action='store_true',
 					help="Record training log into a text file "
 						 "(default location: 'NYCETA/logs')")
@@ -169,7 +175,7 @@ def gbrt(features, outputs, loss_fn='LSE', lr=1, num_trees=100, verbose=True, is
 	return result
 
 
-def xgboost(features, outputs, lr=0.1, num_trees=100, verbose=True):
+def xgboost(features, outputs, lr=0.1, num_trees=100, subsample=1, max_depth=1, verbose=True):
 	"""Trains and validates a XGBoost GBRT using the given dataset,
 	and reports statistics from training process.
 
@@ -189,6 +195,8 @@ def xgboost(features, outputs, lr=0.1, num_trees=100, verbose=True):
 		'objective': 'reg:squarederror',
 		'learning_rate': lr,
 		'verbosity': 2 if verbose else 1,
+		'subsample': subsample,
+		'max_depth': max_depth,
 	}
 
 	model = xgb.XGBRegressor(**params)
@@ -258,7 +266,9 @@ def main():
 		result = xgboost(features, outputs,
 						 lr = parsed_args.learning_rate,
 						 num_trees = parsed_args.num_trees,
+						 max_depth = parsed_args.max_depth,
 						 verbose = parsed_args.verbose,
+						 subsample = parsed_args.subsample_rate,
 						)
 	elif parsed_args.model == "stc_xgboost":
 		features, outputs = extract_features(conn,
@@ -281,7 +291,7 @@ def main():
 		pass
 
 	if parsed_args.log:
-		write_log(args=parsed_args, result=result)
+		write_log(args=parsed_args, stats=result)
 
 	if 'val_loss' in result.keys():
 		print(f"Validation set MSE = {result['val_loss']}")
