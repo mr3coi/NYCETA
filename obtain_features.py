@@ -284,7 +284,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         features, outputs = extract_all_features(conn, table_name)
 
     elif variant == 'random':
-        if not type(size) is int:
+        if not isinstance(size, int):
             print('Please provide an integer size for the random batch.')
         print('Extracting features from a random batch of data of size {} in {}'.format(size, table_name))
         features, outputs = extract_random_data_features(conn, table_name, size)
