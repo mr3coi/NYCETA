@@ -103,7 +103,13 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# Vim temporary swap files
+*.swp
+*.swo
+
 # Taxi data
 TaxiData/
 rides.db
 *.geojson
+*_curves.png
+logs/

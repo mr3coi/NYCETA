@@ -1,10 +1,13 @@
 # pragma pylint: disable=C0103, C0303
 import sqlite3
+from sqlite3 import Error
 import sys
 import datetime
 import numpy as np
 from scipy import sparse
 from utils import create_connection
+from math import floor
+from time import time
 
 
 def get_one_hot(values, min_val, max_val):
@@ -186,7 +189,82 @@ def extract_random_data_features(conn, table_name, random_size):
     return features, outputs
 
 
-def extract_features(conn, table_name, variant='all', random_size=None):
+def extract_batch_features(conn, table_name, batch_size, block_size, replace_blk=False, verbose=False):
+    """Extracts the features from a batch of data
+    from the table of the database, without shuffling
+
+    :conn: connection object to the database
+    :table_name: name of the table holding the data
+    :batch_size: the size of the batch to be taken
+    :block_size: the size of each block(chunk) of rows that constitute
+        a single batch. Determines the granularity of shuffling.
+    :replace_blk: whether to sample blocks with/without replacement
+        when forming a minibatch
+    :verbose: whether to print out progress onto stdout
+    :returns: a generator that yields each minibatch
+        as a (features, outputs) pair.
+    """
+    cursor = conn.cursor()
+
+    if verbose:
+        count_start = time()
+    count_cmd = (f'SELECT COUNT(PULocationID) FROM {table_name} ')
+    try:
+        cursor.execute(count_cmd)
+    except Error as e:
+        print(e)
+    NUM_ROWS = cursor.fetchone()[0]
+    assert type(NUM_ROWS) is int, f'cursor.fetchone() has returned {type(NUM_ROWS)} instead of an int.'
+
+    NUM_BATCH = floor(NUM_ROWS / batch_size)
+
+    NUM_BLKS = floor(NUM_ROWS / block_size)
+    BLKS_PER_BATCH = (int)(batch_size / block_size)
+    blk_list = np.arange(NUM_BLKS)
+
+    for batch_idx in range(NUM_BATCH):
+        print(f"Loading batch {batch_idx+1}/{NUM_BATCH}")
+        blks_in_sample = np.random.choice(NUM_BLKS,
+                                          size=BLKS_PER_BATCH,
+                                          replace=False)
+        if not replace_blk:
+            blk_list = blk_list[[item not in blks_in_sample for item in blk_list]]
+
+        for i, blk_idx in enumerate(np.sort(blks_in_sample)):
+            if verbose:
+                print(f">>> Loading block {i+1}/{BLKS_PER_BATCH} of the minibatch")
+
+            command = ('SELECT tpep_pickup_datetime, tpep_dropoff_datetime, '
+                       'PULocationID, DOLocationID '
+                       f'FROM {table_name} '
+                       f'LIMIT {block_size} '
+                       f'OFFSET {blk_idx * block_size}')
+            query_start = time()
+            try:
+                cursor.execute(command)
+            except Error as e:
+                print(e)
+
+            rows = np.array(cursor.fetchall())
+            if verbose:
+                print(f">>> Time taken for query: {time() - query_start} seconds")
+
+            preproc_start = time()
+            if i == 0:
+                features, outputs = get_naive_features(rows)
+                if verbose:
+                    print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
+            else:
+                features_sample, outputs_sample = get_naive_features(rows)
+                if verbose:
+                    print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
+                features = sparse.vstack([features, features_sample], format="csr")
+                outputs = np.concatenate((outputs, outputs_sample))
+
+        yield features, outputs
+
+
+def extract_features(conn, table_name, variant='all', size=None, block_size=None):
     """Reads the data from the database and obtains the features
 
     :conn: connection object to the database
@@ -195,8 +273,8 @@ def extract_features(conn, table_name, variant='all', random_size=None):
         Must be one out of
             - all : extracts features from all the data
             - random : uses a random batch of data from the db
-    :random_size: the size of the random batch of data 
-        (Used only if variant='random')
+    :size: the size of the batch of data
+        (Used only if variant='random' or 'batch')
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -206,14 +284,23 @@ def extract_features(conn, table_name, variant='all', random_size=None):
         features, outputs = extract_all_features(conn, table_name)
 
     elif variant == 'random':
-        if not type(random_size) is int:
+        if not isinstance(size, int):
             print('Please provide an integer size for the random batch.')
-        print('Extracting features from a random batch of data of size {} in {}'.format(random_size, table_name))
-        features, outputs = extract_random_data_features(conn, table_name, random_size)
+        print('Extracting features from a random batch of data of size {} in {}'.format(size, table_name))
+        features, outputs = extract_random_data_features(conn, table_name, size)
+
+    elif variant == 'batch':
+        if size is None:
+            sys.exit("Please provide the size of the batch.")
+        if block_size is None:
+            sys.exit("Please provide an block_size value.")
+        if size % block_size > 0:
+            sys.exit("Please provide a batch size that is a multiple of block size.")
+        print('Extracting features from a batch of data of size {} block_size in {}'.format(size, block_size, table_name))
+        return extract_batch_features(conn, table_name, size, block_size, replace_blk=True, verbose=True)
     
     else:
-        print("Type must be one of {'all', 'random'}")
-        sys.exit(0)
+        sys.exit("Type must be one of {'all', 'random', 'batch'}.")
 
     return features, outputs
 
@@ -222,6 +309,7 @@ if __name__ == "__main__":
     db_name = "rides.db" 
     con = create_connection(db_name)   
     # We have a total of 67302302 entries in the rides table 
-    features_, outputs_ = extract_features(con, "rides", variant='all', random_size=10)
-    print(features_.shape)
-    print(outputs_.shape)
+    #features_, outputs_ = extract_features(con, "rides", variant='all', size=10)
+    for idx, (features_, outputs_) in enumerate(extract_features(con, "rides", variant='batch', size=100000, block_size=1000)):
+        print(f'Batch {idx}) features: {features_.shape}, outputs: {outputs_.shape}')
+        break
