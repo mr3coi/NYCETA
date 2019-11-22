@@ -107,7 +107,7 @@ def parse_geo_json(file_path):
         loaded_geojson = geojson.loads(opened_file.read())
         all_data = []
         for zone in loaded_geojson['features']:
-            location_id = zone['properties']['location_id']
+            location_id = zone['properties']['objectid']
             coordinates = np.array(list(geojson.utils.coords(zone)))
 
             # Approximate center of zone by finding center of bounding
