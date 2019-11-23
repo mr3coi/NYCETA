@@ -17,29 +17,43 @@ from pytz import timezone
 from obtain_features import *
 
 
-parser = argparse.ArgumentParser(description="Specify baseline model to train")
+parser = argparse.ArgumentParser(
+            description="Configure baseline model and how to train it"
+         )
+
+# Model / Training
 parser.add_argument("-m", "--model", type=str, default="xgboost",
                     choices = ["gbrt", "xgboost", "lightgbm", "xgboost_cv"],
                     help="Choose which baseline model to train (default: xgboost)")
-parser.add_argument("--db-path", type=str, default="./rides.db",
-                    help="Path to the sqlite3 database file.")
-parser.add_argument("-r", "--rand-subset", type=int, default=0,
-                    help="Shuffle the dataset, then sample a subset "
-                         "with size specified by argument (default: 0). "
-                         "Size 0 means the whole dataset is used (i.e. variant=all)")
-parser.add_argument("--batch-size", type=int, default=-1,
-                    help="Batch size for semi-random batch learning")
 parser.add_argument("--num-trees", type=int, default=100,
                     help="Number of trees (iterations) to train")
 parser.add_argument("--max-depth", type=int, default=3,
                     help="The maximum depth of each regression tree")
-parser.add_argument("-v", "--verbose", action="store_true",
-                    help="Let the model print training progress (if supported)")
 parser.add_argument("-lr", "--learning-rate", type=float, default=0.1,
                     help="The learning rate to train the model with")
 parser.add_argument("-ssr", "--subsample-rate", type=float, default=1,
                     help="Subsampling rate for rows. "
                          "Must be between 0 and 1.")
+
+# Dataset
+parser.add_argument("--db-path", type=str, default="./rides.db",
+                    help="Path to the sqlite3 database file.")
+parser.add_argument("-r", "--rand-subset", type=int, default=0,
+                    help="Shuffle the dataset, then sample a subset "
+                         "with size specified by argument (default: 0). "
+                         "Size 0 means the whole dataset is used (i.e. variant='all')")
+parser.add_argument("--batch-size", type=int, default=-1,
+                    help="Batch size for semi-random batch learning")
+parser.add_argument("-doh", "--datetime-one-hot", action="store_true",
+                    help="Let the date & time features be loaded as one-hot")
+parser.add_argument("-woh", "--weekdays-one-hot", action="store_true",
+                    help="Let the week-of-the-day feature be loaded as one-hot")
+parser.add_argument("--no-loc-id", dest='loc_id', action="store_false",
+                    help="Let the zone IDs be excluded from the dataset")
+
+# Logging / Output
+parser.add_argument("-v", "--verbose", action="store_true",
+                    help="Let the model print training progress (if supported)")
 parser.add_argument("--log", action="store_true",
                     help="Record training log into a text file "
                          "(default location: 'NYCETA/logs')")
@@ -77,10 +91,12 @@ def write_log(args, stats, dirname="logs"):
     with open(log_addr, "w") as log:
         log.write(f"model: {args.model}, num_trees: {args.num_trees}, "
                   f"max_depth: {args.max_depth}\n")
+        '''XXX: Deprecated
         if args.batch_size > 0:
             log.write(f"batch_size: {args.batch_size}, "
                       f"block_size: {args.block_size}, "
                       f"num_batch: {'full' if args.num_batch is None else args.num_batch}\n")
+        '''
         log.write(f"subsampling_rate: {args.subsampling_rate}, "
                   f"learning_rate: {args.learning_rate}\n")
         log.write("\n")
@@ -307,9 +323,13 @@ def main():
         start_time = time()
 
     features, outputs = extract_features(conn,
-    				         table_name = "rides",
-    				         variant = "random" if parsed_args.rand_subset > 0 else "all",
-    				         size = parsed_args.rand_subset)
+                                         table_name="rides",
+                                         variant="random" if parsed_args.rand_subset > 0 else "all",
+                                         size=parsed_args.rand_subset,
+                                         datetime_one_hot=parsed_args.datetime_one_hot,
+                                         weekdays_one_hot=parsed_args.weekdays_one_hot,
+                                         include_loc_ids=parsed_args.loc_ids,
+                                        )
 
     if parsed_args.model == "gbrt":
         result = gbrt(features, outputs, verbose=parsed_args.verbose)
