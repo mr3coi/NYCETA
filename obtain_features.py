@@ -81,25 +81,19 @@ def obtain_date_time_features(datetime_lists, datetime_onehot=True, weekdays_one
         seconds = get_one_hot(datetime_lists[4], 0, 59)
         
     else:
-        dates = np.array(datetime_lists[0])
-        dates = np.reshape(dates, (dates.shape[0], 1))
-        months = np.array(datetime_lists[1])
-        months = np.reshape(months, (months.shape[0], 1))
+        dates = np.array(datetime_lists[0]).reshape([-1, 1])
+        months = np.array(datetime_lists[1]).reshape([-1, 1])
 
         # if the representation isnt one hot, we make the range 
         # for hours, minutes and seconds, start from 1 instead of 0. 
-        hours = np.array(datetime_lists[2])+1
-        hours = np.reshape(hours, (hours.shape[0], 1))
-        minutes = np.array(datetime_lists[3])+1
-        minutes = np.reshape(minutes, (minutes.shape[0], 1))
-        seconds = np.array(datetime_lists[4])+1
-        seconds = np.reshape(seconds, (seconds.shape[0], 1))
+        hours = (np.array(datetime_lists[2])+1).reshape([-1, 1])
+        minutes = (np.array(datetime_lists[3])+1).reshape([-1, 1])
+        seconds = (np.array(datetime_lists[4])+1).reshape([-1, 1])
 
     if weekdays_onehot:
         weekdays = get_one_hot(datetime_lists[5], 1, 7)
     else:
-        weekdays = np.array(datetime_lists[5])
-        weekdays = np.reshape(weekdays, (weekdays.shape[0], 1))
+        weekdays = np.array(datetime_lists[5]).reshape([-1, 1])
 
     if datetime_onehot or weekdays_onehot: 
         features = sparse.hstack([dates, months, hours, minutes, seconds, weekdays], format="csr")
