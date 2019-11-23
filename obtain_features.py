@@ -125,10 +125,12 @@ def extract_all_coordinates(conn, table_name, normalized=True):
     command = f'SELECT LocationID, lat, long FROM {table_name}'
     cursor.execute(command)
     rows = np.array(cursor.fetchall(), dtype='int, float32, float32')
-    coords = np.zeros((rows.shape[0], 2))
+    # obtain the coordinates in a (num_zones x 2)-dim np array
+    # where the the 2 dim array at each index i
+    # is the coordinates of location ID i.
+    coords = np.zeros((rows.shape[0], 2))    
     for row in rows:
         coords[row[0]-1] = [row[1], row[2]]
-    coords = np.array(coords)
 
     # Normalizing entries between maximum and minimum 
     if normalized:
