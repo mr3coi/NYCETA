@@ -312,7 +312,7 @@ def main():
     				         size = parsed_args.rand_subset)
 
     if parsed_args.model == "gbrt":
-        result = gbrt(features, outputs, verbose=parsed_args.verbose))
+        result = gbrt(features, outputs, verbose=parsed_args.verbose)
     elif parsed_args.model == "xgboost":
         if parsed_args.verbose:
             data_parsed_time = time()
