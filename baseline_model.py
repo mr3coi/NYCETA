@@ -107,12 +107,12 @@ def write_log(args, stats, dirname="logs"):
                       f"block_size: {args.block_size}, "
                       f"num_batch: {'full' if args.num_batch is None else args.num_batch}\n")
         '''
-        log.write(f"subsampling_rate: {args.subsampling_rate}, "
+        log.write(f"subsample_rate: {args.subsample_rate}, "
                   f"learning_rate: {args.learning_rate}\n")
         log.write("\n")
 
         for tree_idx in range(args.num_trees):
-            log.write(f"[Iter #{tree_idx:4d}] ")
+            log.write(f"[Iter #{tree_idx+1:4d}] ")
             if "val_losses" in stats.keys():
                 log.write(f"val_loss = {stats['val_losses'][tree_idx]:.4f}")
             if "train_losses" in stats.keys():
@@ -300,8 +300,6 @@ def xgboost(features=None, outputs=None,
                           verbose_eval=verbose,
                           evals_result=evals_result,
                          )
-
-        print(evals_result)
 
         train_losses = evals_result["train"][loss] # 1st arg in `eval_set`
         val_losses   = evals_result["validation"][loss] # 2nd arg in `eval_set`
