@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser(
 
 # Model / Training
 parser.add_argument("-m", "--model", type=str, default="xgboost",
-                    choices = ["gbrt", "xgboost", "lightgbm", "xgboost_cv"],
+                    choices = ["gbrt", "xgboost", "lightgbm", "xgboost_cv", "save"],
                     help="Choose which baseline model to train (default: xgboost)")
 parser.add_argument("--num-trees", type=int, default=100,
                     help="Number of trees (iterations) to train")
@@ -34,6 +34,16 @@ parser.add_argument("-lr", "--learning-rate", type=float, default=0.1,
 parser.add_argument("-ssr", "--subsample-rate", type=float, default=1,
                     help="Subsampling rate for rows. "
                          "Must be between 0 and 1.")
+
+# Speeding-up Training
+parser.add_argument("--gpu", action="store_true",
+                    help="Let the model train on GPU. "
+                         "Currently only supported by 'xgboost'")
+parser.add_argument("--xgb-num-thread", type=int, default=4,
+                    help="Number of parallel threads for XGBoost")
+parser.add_argument("--use-saved", action="store_true",
+                    help="Use the preprocessed & saved DMatrix data. "
+                         "Need to first run with '--model save'")
 
 # Dataset
 parser.add_argument("--db-path", type=str, default="./rides.db",
@@ -211,12 +221,15 @@ def gbrt(features, outputs,
     return result
 
 
-def xgboost(features, outputs,
+def xgboost(features=None, outputs=None,
             loss_fn="LSE",
             lr=0.1,
             num_trees=100,
             subsample=1,
             max_depth=3,
+            gpu=False,
+            n_jobs=4,
+            use_saved=False,
             verbose=True):
     """Trains and validates a XGBoost GBRT using the given dataset,
     and reports statistics from training process.
@@ -231,34 +244,70 @@ def xgboost(features, outputs,
         - "val_losses":     The validation loss after each iteration
         - "train_losses":   The training loss after each iteration
     """
-    f_train, f_val, o_train, o_val = \
-        train_test_split(features, outputs, test_size=0.1, shuffle=True)
     loss = {"LSE": "rmse"}[loss_fn]
     objective = {"LSE": "reg:squarederror"}[loss_fn]
 
-    params = {
-        "n_estimators": num_trees,
-        "objective": objective,
-        "learning_rate": lr,
-        "verbosity": 2 if verbose else 1,
-        "subsample": subsample,
-        "max_depth": max_depth,
-    }
+    if not use_saved:
+        assert features is not None and outputs is not None, \
+            "ERROR: Please provide `features` or `outputs`."
 
-    model = xgb.XGBRegressor(**params)
-    model.fit(f_train, o_train,
-              eval_set = [(f_train,o_train), (f_val, o_val)],
-              eval_metric = loss,
-              verbose=verbose)
+        f_train, f_val, o_train, o_val = \
+            train_test_split(features, outputs, test_size=0.1, shuffle=True)
+
+        params = {
+            "tree_method": "gpu_hist" if gpu else "approx",
+            "n_estimators": num_trees,
+            "objective": objective,
+            "learning_rate": lr,
+            "verbosity": 2 if verbose else 1,
+            "subsample": subsample,
+            "max_depth": max_depth,
+        }
+        if not gpu:
+            params['n_jobs'] = n_jobs
+
+        model = xgb.XGBRegressor(**params)
+        model.fit(f_train, o_train,
+                  #eval_set = [(f_train,o_train), (f_val, o_val)],
+                  eval_set = [(f_val, o_val)],
+                  eval_metric = loss,
+                  verbose=verbose)
+
+        evals_result = model.evals_result()
+
+        train_losses = evals_result["validation_0"][loss] # 1st arg in `eval_set`
+        val_losses   = evals_result["validation_1"][loss] # 2nd arg in `eval_set`
+    else:
+        bst_params = {
+            "tree_method": "gpu_hist" if gpu else "approx",
+            "objective": objective,
+            "learning_rate": lr,
+            "verbosity": 2 if verbose else 1,
+            "subsample": subsample,
+            "max_depth": max_depth,
+            "eval_metric": loss,
+        }
+
+        dtrain = xgb.DMatrix('dtrain.buffer')
+        dval = xgb.DMatrix('dval.buffer')
+        watchlist = [(dtrain,"train"),(dval,"validation")]
+        evals_result = {}
+
+        model = xgb.train(bst_params,
+                          dtrain=dtrain,
+                          num_boost_round=num_trees,
+                          evals=watchlist,
+                          verbose_eval=verbose,
+                          evals_result=evals_result,
+                         )
+
+        print(evals_result)
+
+        train_losses = evals_result["train"][loss] # 1st arg in `eval_set`
+        val_losses   = evals_result["validation"][loss] # 2nd arg in `eval_set`
 
     if verbose:
         print(">>> Model training complete")
-
-    evals_result = model.evals_result()
-
-    train_losses = evals_result["validation_0"][loss] # 1st arg in `eval_set`
-    val_losses   = evals_result["validation_1"][loss] # 2nd arg in `eval_set`
-
     result = {
         "val_loss":     val_losses[-1],
         "val_losses":   val_losses,
@@ -322,28 +371,33 @@ def main():
     if parsed_args.verbose:
         start_time = time()
 
-    features, outputs = extract_features(conn,
-                                         table_name="rides",
-                                         variant="random" if parsed_args.rand_subset > 0 else "all",
-                                         size=parsed_args.rand_subset,
-                                         datetime_one_hot=parsed_args.datetime_one_hot,
-                                         weekdays_one_hot=parsed_args.weekdays_one_hot,
-                                         include_loc_ids=parsed_args.loc_ids,
-                                        )
+    if not parsed_args.use_saved:
+        features, outputs = extract_features(conn,
+                                             table_name="rides",
+                                             variant="random" if parsed_args.rand_subset > 0 else "all",
+                                             size=parsed_args.rand_subset,
+                                             datetime_onehot=parsed_args.datetime_one_hot,
+                                             weekdays_onehot=parsed_args.weekdays_one_hot,
+                                             include_loc_ids=parsed_args.loc_id,
+                                            )
 
     if parsed_args.model == "gbrt":
         result = gbrt(features, outputs, verbose=parsed_args.verbose)
     elif parsed_args.model == "xgboost":
-        if parsed_args.verbose:
+        if not parsed_args.use_saved and parsed_args.verbose:
             data_parsed_time = time()
             print(">>> Data parsing complete, "
                   f"duration: {data_parsed_time - start_time} seconds")
-        result = xgboost(features, outputs,
+        result = xgboost(features if not parsed_args.use_saved else None,
+                         outputs  if not parsed_args.use_saved else None,
                          lr=parsed_args.learning_rate,
                          num_trees=parsed_args.num_trees,
                          max_depth=parsed_args.max_depth,
                          verbose=parsed_args.verbose,
                          subsample=parsed_args.subsample_rate,
+                         gpu=parsed_args.gpu,
+                         n_jobs=parsed_args.xgb_num_thread,
+                         use_saved=parsed_args.use_saved,
                         )
     elif parsed_args.model == "xgboost_cv":
         if parsed_args.verbose:
@@ -376,6 +430,18 @@ def main():
         return
     elif parsed_args.model == "lightgbm":
         pass
+    elif parsed_args.model == "save":
+        f_train, f_val, o_train, o_val = \
+            train_test_split(features, outputs, test_size=0.1, shuffle=True)
+        dtrain = xgb.DMatrix(f_train, label=o_train)
+        dval = xgb.DMatrix(f_val, label=o_val)
+        if parsed_args.verbose:
+            print(">>> Conversion to DMatrix complete")
+        dtrain.save_binary('dtrain.buffer')
+        dval.save_binary('dval.buffer')
+        if parsed_args.verbose:
+            print(">>> DMatrices saved to disk")
+        return
 
     if parsed_args.log:
         write_log(args=parsed_args, stats=result)
