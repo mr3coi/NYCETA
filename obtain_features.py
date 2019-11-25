@@ -300,7 +300,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
 
 def extract_random_data_features(conn, table_name, random_size, 
     coords_table_name='coordinates', boros_table_name='locations', 
-    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True):
+    boro=None, datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True):
     """Extracts the features from a random batch of data 
     from the table of the database
 
@@ -334,6 +334,17 @@ def extract_random_data_features(conn, table_name, random_size,
                f'AND DOLocationID < 264 '
                'ORDER BY RANDOM() '
                f'LIMIT {random_size}')
+    if boro is not None:
+        command = ('SELECT r.tpep_pickup_datetime, r.tpep_dropoff_datetime, '
+                   'r.PULocationID, r.DOLocationID '
+                   'FROM (') + command + (
+                       ') r, '
+                       'locations l1, locations l2 '
+                       'WHERE l1.LocationID = r.PULocationID '
+                       'AND l2.LocationID = r.DOLocationID '
+                       f'AND l1.Borough = "{boro}" '
+                       f'AND l2.Borough = "{boro}"')
+
     print('Reading data entries from the table in the database')
     try:
         cursor.execute(command)
@@ -482,7 +493,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
             print('Please provide an integer size for the random batch.')
         print('Extracting features from a random batch of data of size {} in {}'.format(size, table_name))
         features, outputs = extract_random_data_features(conn, table_name, size, datetime_onehot=datetime_onehot, 
-                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids)
+                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, boro='Manhattan')
 
     elif variant == 'batch':
         if size is None:
