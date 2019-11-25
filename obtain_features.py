@@ -308,7 +308,9 @@ def extract_random_data_features(conn, table_name, random_size,
     :table_name: name of the table holding the rides data
     :random_size: the size of the random batch to be taken
     :coords_table_name: name of the table holding the coordinates data
-    :boross_table_name: name of the table holding the boroughs data
+    :boros_table_name: name of the table holding the boroughs data
+    :boro: if not None, a string representing the boro that all rides should
+        start and end in
     :datetime_onehot: boolean for whether we want a onehot represnetation for
         date and time values, or a single index one
     :weekdays_onehot: boolean for whether we want a onehot represnetation for
