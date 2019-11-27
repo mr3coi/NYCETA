@@ -109,6 +109,9 @@ def write_log(args, stats, dirname="logs"):
         '''
         log.write(f"subsample_rate: {args.subsample_rate}, "
                   f"learning_rate: {args.learning_rate}\n")
+        log.write(f"datetime_one_hot: {args.datetime_one_hot}, "
+		  f"weekdays_one_hot: {args.weekdays_one_hot}, "
+                  f"loc_id: {args.loc_id}\n")
         log.write("\n")
 
         for tree_idx in range(args.num_trees):
@@ -200,7 +203,10 @@ def gbrt(features, outputs,
         }
 
     f_train, o_train, f_val, o_val = \
-        train_test_split(features, outputs, test_size=0.1, shuffle=True)
+        train_test_split(features, outputs,
+                         test_size=0.1,
+                         shuffle=True,
+                         random_state=10701)
 
     model = ensemble.GradientBoostingRegressor(**params)
     model.fit(f_train, o_train)
@@ -252,7 +258,10 @@ def xgboost(features=None, outputs=None,
             "ERROR: Please provide `features` or `outputs`."
 
         f_train, f_val, o_train, o_val = \
-            train_test_split(features, outputs, test_size=0.1, shuffle=True)
+            train_test_split(features, outputs,
+                             test_size=0.1,
+                             shuffle=True,
+                             random_state=10701)
 
         params = {
             "tree_method": "gpu_hist" if gpu else "approx",
@@ -268,8 +277,7 @@ def xgboost(features=None, outputs=None,
 
         model = xgb.XGBRegressor(**params)
         model.fit(f_train, o_train,
-                  #eval_set = [(f_train,o_train), (f_val, o_val)],
-                  eval_set = [(f_val, o_val)],
+                  eval_set = [(f_train,o_train), (f_val, o_val)],
                   eval_metric = loss,
                   verbose=verbose)
 
@@ -430,7 +438,10 @@ def main():
         pass
     elif parsed_args.model == "save":
         f_train, f_val, o_train, o_val = \
-            train_test_split(features, outputs, test_size=0.1, shuffle=True)
+            train_test_split(features, outputs,
+                             test_size=0.1,
+                             shuffle=True,
+                             random_state=10701,)
         dtrain = xgb.DMatrix(f_train, label=o_train)
         dval = xgb.DMatrix(f_val, label=o_val)
         if parsed_args.verbose:
