@@ -439,18 +439,18 @@ def main():
     parsed_args = parser.parse_args()
     conn = create_connection(parsed_args.db_path)
 
-    if parsed_args.verbose:
-        start_time = time()
-
     if not parsed_args.use_saved:
-        features, outputs = extract_features(conn,
-                                             table_name="rides",
-                                             variant="random" if parsed_args.rand_subset > 0 else "all",
-                                             size=parsed_args.rand_subset,
-                                             datetime_onehot=parsed_args.datetime_one_hot,
-                                             weekdays_onehot=parsed_args.weekdays_one_hot,
-                                             include_loc_ids=parsed_args.loc_id,
-                                            )
+        if parsed_args.verbose:
+            start_time = time()
+        features, outputs = \
+            extract_features(conn,
+                             table_name="rides",
+                             variant="random" if parsed_args.rand_subset > 0 else "all",
+                             size=parsed_args.rand_subset,
+                             datetime_onehot=parsed_args.datetime_one_hot,
+                             weekdays_onehot=parsed_args.weekdays_one_hot,
+                             include_loc_ids=parsed_args.loc_id,
+                            )
 
     if parsed_args.model == "gbrt":
         result = gbrt(features, outputs, verbose=parsed_args.verbose)
@@ -503,7 +503,7 @@ def main():
     elif parsed_args.model == "lightgbm":
         pass
     elif parsed_args.model == "save":
-        save_dmatrix(features, outputs, args, seed=10701)
+        save_dmatrix(features, outputs, parsed_args, seed=10701)
         return
 
     if parsed_args.log:
