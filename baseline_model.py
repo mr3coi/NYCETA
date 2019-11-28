@@ -24,7 +24,12 @@ parser = argparse.ArgumentParser(
 # Model / Training
 parser.add_argument("-m", "--model", type=str, default="xgboost",
                     choices = ["gbrt", "xgboost", "lightgbm", "xgboost_cv", "save"],
-                    help="Choose which baseline model to train (default: xgboost)")
+                    help="Choose which baseline model to train "
+                         "(default: xgboost)")
+parser.add_argument("-b", "--booster", type=str, default="gbtree",
+                    choices = ["gbtree", "gblinear"],
+                    help="Choose which weak learner to use for XGBoost "
+                         "(default: gbtree)")
 parser.add_argument("--num-trees", type=int, default=100,
                     help="Number of trees (iterations) to train")
 parser.add_argument("--max-depth", type=int, default=3,
@@ -100,7 +105,8 @@ def write_log(args, stats, dirname="logs"):
     log_addr = os.path.join(log_dir(dirname), f"log_{curr_time}.txt")
     with open(log_addr, "w") as log:
         log.write(f"model: {args.model}, num_trees: {args.num_trees}, "
-                  f"max_depth: {args.max_depth}\n")
+                  f"max_depth: {args.max_depth}, "
+                  f"booster: {args.booster}\n")
         '''XXX: Deprecated
         if args.batch_size > 0:
             log.write(f"batch_size: {args.batch_size}, "
@@ -231,6 +237,7 @@ def xgboost(features=None, outputs=None,
             loss_fn="LSE",
             lr=0.1,
             num_trees=100,
+            booster="gbtree",
             subsample=1,
             max_depth=3,
             gpu=False,
@@ -266,6 +273,7 @@ def xgboost(features=None, outputs=None,
         params = {
             "tree_method": "gpu_hist" if gpu else "approx",
             "n_estimators": num_trees,
+            "booster": booster,
             "objective": objective,
             "learning_rate": lr,
             "verbosity": 2 if verbose else 1,
@@ -288,6 +296,7 @@ def xgboost(features=None, outputs=None,
     else:
         bst_params = {
             "tree_method": "gpu_hist" if gpu else "approx",
+            "booster": booster,
             "objective": objective,
             "learning_rate": lr,
             "verbosity": 2 if verbose else 1,
@@ -396,6 +405,7 @@ def main():
                   f"duration: {data_parsed_time - start_time} seconds")
         result = xgboost(features if not parsed_args.use_saved else None,
                          outputs  if not parsed_args.use_saved else None,
+                         booster=parsed_args.booster,
                          lr=parsed_args.learning_rate,
                          num_trees=parsed_args.num_trees,
                          max_depth=parsed_args.max_depth,
