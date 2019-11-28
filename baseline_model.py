@@ -48,7 +48,10 @@ parser.add_argument("--xgb-num-thread", type=int, default=4,
                     help="Number of parallel threads for XGBoost")
 parser.add_argument("--use-saved", action="store_true",
                     help="Use the preprocessed & saved DMatrix data. "
-                         "Need to first run with '--model save'")
+                         "Need to first run with '--model save'. "
+                         "Also, recommend passing the same options "
+                         "as was used provided in '--model save' call "
+                         "for logging purposes")
 
 # Dataset
 parser.add_argument("--db-path", type=str, default="./rides.db",
@@ -65,6 +68,8 @@ parser.add_argument("-woh", "--weekdays-one-hot", action="store_true",
                     help="Let the week-of-the-day feature be loaded as one-hot")
 parser.add_argument("--no-loc-id", dest='loc_id', action="store_false",
                     help="Let the zone IDs be excluded from the dataset")
+parser.add_argument("--test-size", type=float, default=0.1,
+                    help="Proportion of validation set (default: 0.1)")
 
 # Logging / Output
 parser.add_argument("-v", "--verbose", action="store_true",
@@ -73,6 +78,20 @@ parser.add_argument("--log", action="store_true",
                     help="Record training log into a text file "
                          "(default location: 'NYCETA/logs')")
 
+
+def create_dir(dirname):
+    """Creates a directory in project root directory
+    to store training logs, unless already exists.
+
+    :dirname: the name of the directory
+    :returns: the path to the directory
+    """
+    dir_path = os.path.join(os.getcwd(),dirname)
+    try:
+        os.mkdir(dir_path)
+    except OSError:
+        pass
+    return dir_path
 
 def write_log(args, stats, dirname="logs"):
     """Store a log of losses per each iteration onto a file.
@@ -86,23 +105,10 @@ def write_log(args, stats, dirname="logs"):
     :dirname: name of the directory to contain log files
     :returns: None
     """
-    def log_dir(dirname):
-        """Creates a directory in project root directory
-        to store training logs, unless already exists.
-
-        :dirname: the name of the directory
-        :returns: the path to the directory
-        """
-        log_path = os.path.join(os.getcwd(),dirname)
-        try:
-            os.mkdir(log_path)
-        except OSError:
-            pass
-        return log_path
 
     curr_time = dt.now().astimezone(timezone("US/Eastern")) \
                         .strftime("%Y-%m-%d-%H-%M-%S")
-    log_addr = os.path.join(log_dir(dirname), f"log_{curr_time}.txt")
+    log_addr = os.path.join(create_dir(dirname), f"log_{curr_time}.txt")
     with open(log_addr, "w") as log:
         log.write(f"model: {args.model}, num_trees: {args.num_trees}, "
                   f"max_depth: {args.max_depth}, "
@@ -116,9 +122,10 @@ def write_log(args, stats, dirname="logs"):
         log.write(f"subsample_rate: {args.subsample_rate}, "
                   f"learning_rate: {args.learning_rate}\n")
         log.write(f"datetime_one_hot: {args.datetime_one_hot}, "
-		  f"weekdays_one_hot: {args.weekdays_one_hot}, "
-                  f"loc_id: {args.loc_id}\n")
-        log.write("\n")
+                  f"weekdays_one_hot: {args.weekdays_one_hot}, "
+                  f"loc_id: {args.loc_id}, "
+                  f"test_size: {args.test_size}")
+        log.write("\n\n")
 
         for tree_idx in range(args.num_trees):
             log.write(f"[Iter #{tree_idx+1:4d}] ")
@@ -379,6 +386,55 @@ def xgboost_cv(features, outputs,
     return search.cv_results_
 
 
+def save_dmatrix(features, outputs, args, seed=None):
+    """Save training/validation DMatrices for XGBoost
+    under configurations given by `args`.
+    Configurable items are (refer to parser for details):
+    - datetime-one-hot
+    - weekdays-one-hot
+    - no-loc-id
+    - test-size
+    The DMatrices are stored in 'data' dir under project
+    root, and their names encode the configurations.
+
+    :features, outputs: Loaded datasets (NumPy arrays)
+    :args: Argparse object
+    :seed: Seed for randomizing `train_test_split`
+    :returns: None
+    """
+    # Record configurations in dataset name
+    save_name = "dm"
+    if args.datetime_one_hot:
+        save_name += "_doh"
+    if args.weekdays_one_hot:
+        save_name += "_woh"
+    if args.loc_id:
+        save_name += "_locid"
+    save_name += f"_s{seed}" if seed is not None else "_random"
+    save_name += f"_test{args.test_size}"
+
+    data_dirpath = create_dir("data")
+    train_path = os.path.join(data_dirpath, save_name + '.train')
+    val_path = os.path.join(data_dirpath, save_name + '.val')
+
+    # Split data with specified `test_size`
+    f_train, f_val, o_train, o_val = \
+        train_test_split(features, outputs,
+                         test_size=args.test_size,
+                         shuffle=True,
+                         random_state=seed,)
+
+    # Store DMatrices
+    dtrain = xgb.DMatrix(f_train, label=o_train)
+    dval = xgb.DMatrix(f_val, label=o_val)
+    if args.verbose:
+        print(">>> Conversion to DMatrix complete")
+    dtrain.save_binary(train_path)
+    dval.save_binary(val_path)
+    if args.verbose:
+        print(">>> DMatrices saved to disk")
+
+
 def main():
     parsed_args = parser.parse_args()
     conn = create_connection(parsed_args.db_path)
@@ -447,19 +503,7 @@ def main():
     elif parsed_args.model == "lightgbm":
         pass
     elif parsed_args.model == "save":
-        f_train, f_val, o_train, o_val = \
-            train_test_split(features, outputs,
-                             test_size=0.1,
-                             shuffle=True,
-                             random_state=10701,)
-        dtrain = xgb.DMatrix(f_train, label=o_train)
-        dval = xgb.DMatrix(f_val, label=o_val)
-        if parsed_args.verbose:
-            print(">>> Conversion to DMatrix complete")
-        dtrain.save_binary('dtrain.buffer')
-        dval.save_binary('dval.buffer')
-        if parsed_args.verbose:
-            print(">>> DMatrices saved to disk")
+        save_dmatrix(features, outputs, args, seed=10701)
         return
 
     if parsed_args.log:
