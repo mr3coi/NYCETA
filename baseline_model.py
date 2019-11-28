@@ -52,6 +52,9 @@ parser.add_argument("--use-saved", action="store_true",
                          "Also, recommend passing the same options "
                          "as was used provided in '--model save' call "
                          "for logging purposes")
+parser.add_argument("--save-path", type=str, default=None,
+                    help="The path to saved DMatrices. Make sure "
+                         "to EXCLUDE the extensions")
 
 # Dataset
 parser.add_argument("--db-path", type=str, default="./rides.db",
@@ -250,6 +253,7 @@ def xgboost(features=None, outputs=None,
             gpu=False,
             n_jobs=4,
             use_saved=False,
+            save_path=None,
             verbose=True):
     """Trains and validates a XGBoost GBRT using the given dataset,
     and reports statistics from training process.
@@ -301,6 +305,8 @@ def xgboost(features=None, outputs=None,
         train_losses = evals_result["validation_0"][loss] # 1st arg in `eval_set`
         val_losses   = evals_result["validation_1"][loss] # 2nd arg in `eval_set`
     else:
+        assert save_path is not None, \
+            "ERROR: Need to provide 'save_path'."
         bst_params = {
             "tree_method": "gpu_hist" if gpu else "approx",
             "booster": booster,
@@ -312,8 +318,8 @@ def xgboost(features=None, outputs=None,
             "eval_metric": loss,
         }
 
-        dtrain = xgb.DMatrix('dtrain.buffer')
-        dval = xgb.DMatrix('dval.buffer')
+        dtrain = xgb.DMatrix(save_path + '.train')
+        dval = xgb.DMatrix(save_path + '.val')
         watchlist = [(dtrain,"train"),(dval,"validation")]
         evals_result = {}
 
@@ -470,6 +476,7 @@ def main():
                          gpu=parsed_args.gpu,
                          n_jobs=parsed_args.xgb_num_thread,
                          use_saved=parsed_args.use_saved,
+                         save_path=parsed_args.save_path if parsed_args.use_saved else None)
                         )
     elif parsed_args.model == "xgboost_cv":
         if parsed_args.verbose:
