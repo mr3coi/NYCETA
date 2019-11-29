@@ -43,15 +43,15 @@ parser.add_argument("-ssr", "--subsample-rate", type=float, default=1,
 # DART-specific
 parser.add_argument("--rate-drop", type=float, default=0.1,
                     help="Dropout rate for DART. "
-                    	 "Must first set '--booster dart' option")
+                         "Must first set '--booster dart' option")
 parser.add_argument("-st", "--sample-type", type=str, default="uniform",
-					choices=["uniform","weighted"],
-					help="Sampling algo for DART. "
-                    	 "Must first set '--booster dart' option")
+                    choices=["uniform","weighted"],
+                    help="Sampling algo for DART. "
+                         "Must first set '--booster dart' option")
 parser.add_argument("-nt", "--normalize-type", type=str, default="tree",
-					choices=["tree","forest"],
-					help="Normalization algo for DART. "
-                    	 "Must first set '--booster dart' option")
+                    choices=["tree","forest"],
+                    help="Normalization algo for DART. "
+                         "Must first set '--booster dart' option")
 
 # Speeding-up Training
 parser.add_argument("--gpu", action="store_true",
@@ -309,6 +309,10 @@ def xgboost(features=None, outputs=None,
         }
         if not gpu:
             params['n_jobs'] = n_jobs
+        if booster == "dart":
+            params['rate_drop'] = rate_drop
+            params['sample_type'] = sample_type
+            params['normalize_type'] = normalize_type
 
         model = xgb.XGBRegressor(**params)
         model.fit(f_train, o_train,
@@ -334,9 +338,9 @@ def xgboost(features=None, outputs=None,
             "eval_metric": loss,
         }
         if booster == "dart":
-        	params['rate_drop'] = rate_drop
-        	params['sample_type'] = sample_type
-        	params['normalize_type'] = normalize_type
+            params['rate_drop'] = rate_drop
+            params['sample_type'] = sample_type
+            params['normalize_type'] = normalize_type
 
         dtrain = xgb.DMatrix(save_path + '.train')
         dval = xgb.DMatrix(save_path + '.val')
@@ -486,19 +490,19 @@ def main():
             print(">>> Data parsing complete, "
                   f"duration: {data_parsed_time - start_time} seconds")
         params = {
-			 "booster":parsed_args.booster,
-			 "lr":parsed_args.learning_rate,
-			 "num_trees":parsed_args.num_trees,
-			 "max_depth":parsed_args.max_depth,
-			 "verbose":parsed_args.verbose,
-			 "subsample":parsed_args.subsample_rate,
-			 "gpu":parsed_args.gpu,
-			 "n_jobs":parsed_args.xgb_num_thread,
-			 "use_saved":parsed_args.use_saved,
-			 "save_path":parsed_args.save_path if parsed_args.use_saved else None,
-			 "rate_drop":parsed_args.rate_drop,
-			 "sample_type":parsed_args.sample_type,
-			 "normalize_type":parsed_args.normalize_type,
+             "booster":parsed_args.booster,
+             "lr":parsed_args.learning_rate,
+             "num_trees":parsed_args.num_trees,
+             "max_depth":parsed_args.max_depth,
+             "verbose":parsed_args.verbose,
+             "subsample":parsed_args.subsample_rate,
+             "gpu":parsed_args.gpu,
+             "n_jobs":parsed_args.xgb_num_thread,
+             "use_saved":parsed_args.use_saved,
+             "save_path":parsed_args.save_path if parsed_args.use_saved else None,
+             "rate_drop":parsed_args.rate_drop,
+             "sample_type":parsed_args.sample_type,
+             "normalize_type":parsed_args.normalize_type,
         }
         result = xgboost(features if not parsed_args.use_saved else None,
                          outputs  if not parsed_args.use_saved else None,
