@@ -27,7 +27,7 @@ parser.add_argument("-m", "--model", type=str, default="xgboost",
                     help="Choose which baseline model to train "
                          "(default: xgboost)")
 parser.add_argument("-b", "--booster", type=str, default="gbtree",
-                    choices = ["gbtree", "gblinear"],
+                    choices = ["gbtree", "gblinear", "dart"],
                     help="Choose which weak learner to use for XGBoost "
                          "(default: gbtree)")
 parser.add_argument("--num-trees", type=int, default=100,
@@ -39,6 +39,19 @@ parser.add_argument("-lr", "--learning-rate", type=float, default=0.1,
 parser.add_argument("-ssr", "--subsample-rate", type=float, default=1,
                     help="Subsampling rate for rows. "
                          "Must be between 0 and 1.")
+
+# DART-specific
+parser.add_argument("--rate-drop", type=float, default=0.1,
+                    help="Dropout rate for DART. "
+                    	 "Must first set '--booster dart' option")
+parser.add_argument("-st", "--sample-type", type=str, default="uniform",
+					choices=["uniform","weighted"],
+					help="Sampling algo for DART. "
+                    	 "Must first set '--booster dart' option")
+parser.add_argument("-nt", "--normalize-type", type=str, default="tree",
+					choices=["tree","forest"],
+					help="Normalization algo for DART. "
+                    	 "Must first set '--booster dart' option")
 
 # Speeding-up Training
 parser.add_argument("--gpu", action="store_true",
@@ -250,6 +263,9 @@ def xgboost(features=None, outputs=None,
             booster="gbtree",
             subsample=1,
             max_depth=3,
+            rate_drop=None,
+            sample_type=None,
+            normalize_type=None,
             gpu=False,
             n_jobs=4,
             use_saved=False,
@@ -307,7 +323,7 @@ def xgboost(features=None, outputs=None,
     else:
         assert save_path is not None, \
             "ERROR: Need to provide 'save_path'."
-        bst_params = {
+        params = {
             "tree_method": "gpu_hist" if gpu else "approx",
             "booster": booster,
             "objective": objective,
@@ -317,13 +333,17 @@ def xgboost(features=None, outputs=None,
             "max_depth": max_depth,
             "eval_metric": loss,
         }
+        if booster == "dart":
+        	params['rate_drop'] = rate_drop
+        	params['sample_type'] = sample_type
+        	params['normalize_type'] = normalize_type
 
         dtrain = xgb.DMatrix(save_path + '.train')
         dval = xgb.DMatrix(save_path + '.val')
         watchlist = [(dtrain,"train"),(dval,"validation")]
         evals_result = {}
 
-        model = xgb.train(bst_params,
+        model = xgb.train(params,
                           dtrain=dtrain,
                           num_boost_round=num_trees,
                           evals=watchlist,
@@ -465,18 +485,24 @@ def main():
             data_parsed_time = time()
             print(">>> Data parsing complete, "
                   f"duration: {data_parsed_time - start_time} seconds")
+        params = {
+			 "booster":parsed_args.booster,
+			 "lr":parsed_args.learning_rate,
+			 "num_trees":parsed_args.num_trees,
+			 "max_depth":parsed_args.max_depth,
+			 "verbose":parsed_args.verbose,
+			 "subsample":parsed_args.subsample_rate,
+			 "gpu":parsed_args.gpu,
+			 "n_jobs":parsed_args.xgb_num_thread,
+			 "use_saved":parsed_args.use_saved,
+			 "save_path":parsed_args.save_path if parsed_args.use_saved else None,
+			 "rate_drop":parsed_args.rate_drop,
+			 "sample_type":parsed_args.sample_type,
+			 "normalize_type":parsed_args.normalize_type,
+        }
         result = xgboost(features if not parsed_args.use_saved else None,
                          outputs  if not parsed_args.use_saved else None,
-                         booster=parsed_args.booster,
-                         lr=parsed_args.learning_rate,
-                         num_trees=parsed_args.num_trees,
-                         max_depth=parsed_args.max_depth,
-                         verbose=parsed_args.verbose,
-                         subsample=parsed_args.subsample_rate,
-                         gpu=parsed_args.gpu,
-                         n_jobs=parsed_args.xgb_num_thread,
-                         use_saved=parsed_args.use_saved,
-                         save_path=parsed_args.save_path if parsed_args.use_saved else None)
+                         **params,
                         )
     elif parsed_args.model == "xgboost_cv":
         if parsed_args.verbose:
