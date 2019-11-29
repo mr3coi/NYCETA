@@ -290,7 +290,11 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                                                 datetime_onehot=datetime_onehot, 
                                                 weekdays_onehot=weekdays_onehot, 
                                                 include_loc_ids=include_loc_ids)
-            features = sparse.vstack([features, features_sample], format="csr")
+            if isinstance(features, np.ndarray) \
+                and isinstance(features_sample, np.ndarray):
+                features = np.vstack([features, features_sample], format="csr")
+            else:
+                features = sparse.vstack([features, features_sample], format="csr")
             outputs = np.concatenate((outputs, outputs_sample))
 
         batch_num += 1
@@ -439,7 +443,11 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                                                     weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids)
                 if verbose:
                     print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
-                features = sparse.vstack([features, features_sample], format="csr")
+                if isinstance(features, np.ndarray) \
+                    and isinstance(features_sample, np.ndarray):
+                    features = np.vstack([features, features_sample], format="csr")
+                else:
+                    features = sparse.vstack([features, features_sample], format="csr")
                 outputs = np.concatenate((outputs, outputs_sample))
 
         yield features, outputs
