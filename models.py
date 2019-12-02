@@ -35,3 +35,4 @@ class SelectorModel(tf.keras.Model):
 		x = self.dense2(x)
 		y = self.output(x)
 		return y
+		
