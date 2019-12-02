@@ -226,7 +226,7 @@ def get_naive_features(rows, coords, boros, maxLocID=263, datetime_onehot=True,
 
 
 def extract_all_features(conn, table_name, coords_table_name='coordinates', boros_table_name='locations',
-    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True):
+    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, boro=None):
     """Extracts the features from all the data entries 
     in the given table of the database
 
@@ -240,6 +240,8 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         day of the week value, or a single index one
     :include_loc_ids: boolean for whether to include locIds as one-hot
         in the feature vectors, or not 
+    :boro: if not None, a string representing the boro that all rides should
+        start and end in
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -266,6 +268,17 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                    f'AND DOLocationID < 264 '
                    f'LIMIT {limit} '
                    f'OFFSET {offset}')
+
+        if boro is not None:
+            command = ('SELECT r.tpep_pickup_datetime, r.tpep_dropoff_datetime, '
+                       'r.PULocationID, r.DOLocationID '
+                       'FROM (') + command + (
+                           ') r, '
+                           'locations l1, locations l2 '
+                           'WHERE l1.LocationID = r.PULocationID '
+                           'AND l2.LocationID = r.DOLocationID '
+                           f'AND l1.Borough = "{boro}" '
+                           f'AND l2.Borough = "{boro}"')
         
         try:
             cursor.execute(command)
@@ -365,7 +378,7 @@ def extract_random_data_features(conn, table_name, random_size,
 def extract_batch_features(conn, table_name, batch_size, block_size,
     coords_table_name='coordinates', boros_table_name='locations',
     datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True,
-    replace_blk=False, verbose=False):
+    replace_blk=False, verbose=False, boro=None):
     """Extracts the features from a batch of data
     from the table of the database, without shuffling
 
@@ -385,6 +398,8 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
     :replace_blk: whether to sample blocks with/without replacement
         when forming a minibatch
     :verbose: whether to print out progress onto stdout
+    :boro: if not None, a string representing the boro that all rides should
+        start and end in
     :returns: a generator that yields each minibatch
         as a (features, outputs) pair.
     """
@@ -431,6 +446,18 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                        f'AND DOLocationID < 264 '
                        f'LIMIT {block_size} '
                        f'OFFSET {blk_idx * block_size}')
+
+            if boro is not None:
+                command = ('SELECT r.tpep_pickup_datetime, r.tpep_dropoff_datetime, '
+                           'r.PULocationID, r.DOLocationID '
+                           'FROM (') + command + (
+                               ') r, '
+                               'locations l1, locations l2 '
+                               'WHERE l1.LocationID = r.PULocationID '
+                               'AND l2.LocationID = r.DOLocationID '
+                               f'AND l1.Borough = "{boro}" '
+                               f'AND l2.Borough = "{boro}"')
+
             query_start = time()
             try:
                 cursor.execute(command)
@@ -459,7 +486,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
 
 
 def extract_features(conn, table_name, variant='all', size=None, block_size=None, 
-    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True):
+    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, boro=None):
     """Reads the data from the database and obtains the features
 
     :conn: connection object to the database
@@ -481,6 +508,8 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         day of the week value, or a single index one
     :include_loc_ids: boolean for whether to include locIds as one-hot
         in the feature vectors, or not 
+    :boro: if not None, a string representing the boro that all rides should
+        start and end in
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -488,14 +517,14 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
     if variant == 'all':
         print('Extracting features from all the data in {}'.format(table_name))
         features, outputs = extract_all_features(conn, table_name, datetime_onehot=datetime_onehot, 
-                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids)
+                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, boro=boro)
 
     elif variant == 'random':
         if not isinstance(size, int):
             print('Please provide an integer size for the random batch.')
         print('Extracting features from a random batch of data of size {} in {}'.format(size, table_name))
         features, outputs = extract_random_data_features(conn, table_name, size, datetime_onehot=datetime_onehot, 
-                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, boro='Manhattan')
+                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, boro=boro)
 
     elif variant == 'batch':
         if size is None:
@@ -506,7 +535,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
             sys.exit("Please provide a batch size that is a multiple of block size.")
         print('Extracting features from a batch of data of size {} block_size in {}'.format(size, block_size, table_name))
         return extract_batch_features(conn, table_name, size, block_size, datetime_onehot=datetime_onehot, 
-                    weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=True)
+                    weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=True, boro=boro)
     
     else:
         sys.exit("Type must be one of {'all', 'random', 'batch'}.")
@@ -518,7 +547,7 @@ if __name__ == "__main__":
     db_name = "rides.db" 
     con = create_connection(db_name)   
     # We have a total of 67302302 entries in the rides table 
-    features_, outputs_ = extract_features(con, "rides", variant='random', size=10,
+    features_, outputs_ = extract_features(con, "rides", variant='batch', size=10, boro='Manhattan',
                                                 datetime_onehot=False, 
                                                 weekdays_onehot=False, 
                                                 include_loc_ids=False)
