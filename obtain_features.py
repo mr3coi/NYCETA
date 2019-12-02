@@ -292,7 +292,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                                                 include_loc_ids=include_loc_ids)
             if isinstance(features, np.ndarray) \
                 and isinstance(features_sample, np.ndarray):
-                features = np.vstack([features, features_sample], format="csr")
+                features = np.vstack([features, features_sample])
             else:
                 features = sparse.vstack([features, features_sample], format="csr")
             outputs = np.concatenate((outputs, outputs_sample))
@@ -445,7 +445,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                     print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
                 if isinstance(features, np.ndarray) \
                     and isinstance(features_sample, np.ndarray):
-                    features = np.vstack([features, features_sample], format="csr")
+                    features = np.vstack([features, features_sample])
                 else:
                     features = sparse.vstack([features, features_sample], format="csr")
                 outputs = np.concatenate((outputs, outputs_sample))
