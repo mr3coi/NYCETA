@@ -34,7 +34,7 @@ BRIDGES = [
     # EWR to Staten Island
     (23, 1),
     # Manhattan to Staten Island
-    (125, 156),
-    (246, 156),
-    (243, 156),
+    (125, 187),
+    (246, 187),
+    (243, 187),
     ]
