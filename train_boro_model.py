@@ -2,7 +2,7 @@ import os
 import datetime
 import argparse
 import numpy as np
-from boro_model import BoroModel
+from models import BoroModel
 from utils import create_connection
 from obtain_features import extract_features
 
@@ -55,7 +55,9 @@ def train_on_batches(model, data_generator, data_gen_args):
 
 def train(model, data_generator, data_gen_args):
 	
-	features, values = data_generator(**data_gen_args)
+	# features, values = data_generator(**data_gen_args)
+	features = np.load("features_queens.npy", allow_pickle=True)
+	values = np.load("outputs_queens.npy", allow_pickle=True)
 	model_dir = os.path.join("models",  datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 	os.mkdir(model_dir)
 
@@ -63,8 +65,8 @@ def train(model, data_generator, data_gen_args):
 	loss = tf.keras.losses.MSE
 	model.compile(optimizer=optimizer, loss=loss)
 
-	num_epochs = 20
-	model.fit(features, values, epochs=num_epochs)
+	num_epochs = 200
+	model.fit(features, values, epochs=num_epochs, verbose=2)
 
 	tf.keras.models.save_model(model, os.path.join(model_dir, f'model_{num_epochs}'))
 
@@ -73,8 +75,9 @@ def main():
 	parsed_args = parser.parse_args()
 
 	model = BoroModel([200,50])
-	conn = create_connection(parsed_args.db_path)
+	# conn = create_connection(parsed_args.db_path)
 
+	conn = None
 	batch_size = 2048
 	block_size = 512
 	variant = 'all'
