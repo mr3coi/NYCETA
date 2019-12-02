@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(
 
 # Model / Training
 parser.add_argument("-m", "--model", type=str, default="xgboost",
-                    choices = ["gbrt", "xgboost", "lightgbm", "xgboost_cv", "save"],
+                    choices = ["gbrt", "xgboost", "xgboost_cv", "save"],
                     help="Choose which baseline model to train "
                          "(default: xgboost)")
 parser.add_argument("-b", "--booster", type=str, default="gbtree",
@@ -376,8 +376,6 @@ def main():
         np.save("./cv_result.npy", result)
         conn.close()
         return
-    elif parsed_args.model == "lightgbm":
-        pass
     elif parsed_args.model == "save":
         save_dmatrix(features, outputs, parsed_args, seed=10701)
         return
