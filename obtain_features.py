@@ -191,8 +191,12 @@ def get_naive_features(rows, coords, boros, maxLocID=263, datetime_onehot=True,
         or a numpy array for the features vectors, 
         and a np array for the time taken in seconds
     """
-
-    p_datetime = parse_datetime(rows[:, 0])
+    try:
+        p_datetime = parse_datetime(rows[:, 0])
+    except:
+        print(rows)
+        print(rows.shape)
+        exit(1)
     d_datetime = parse_datetime(rows[:, 1])
     
     PUDatetime = obtain_date_time_features(p_datetime, datetime_onehot, weekdays_onehot)
@@ -296,12 +300,15 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         except sqlite3.Error as e:
             print(e)
             stop_condition = True
+        
+        offset += limit
+        
         if stop_condition:
             break
         
         rows = np.array(cursor.fetchall())
-        if rows.shape[0] == 0:
-            break
+        if len(rows) == 0:
+            continue
 
         print("Extracting features from the read data")
         if offset == 0:
@@ -314,11 +321,14 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                                                 datetime_onehot=datetime_onehot, 
                                                 weekdays_onehot=weekdays_onehot, 
                                                 include_loc_ids=include_loc_ids)
-            features = sparse.vstack([features, features_sample], format="csr")
+            if isinstance(features, np.ndarray) \
+                and isinstance(features_sample, np.ndarray):
+                features = np.vstack([features, features_sample])
+            else:
+                features = sparse.vstack([features, features_sample], format="csr")
             outputs = np.concatenate((outputs, outputs_sample))
 
         batch_num += 1
-        offset += limit
     return features, outputs
 
 
@@ -479,6 +489,8 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                 print(e)
 
             rows = np.array(cursor.fetchall())
+            if len(rows) == 0:
+                continue
             if verbose:
                 print(f">>> Time taken for query: {time() - query_start} seconds")
 
@@ -493,7 +505,11 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                                                     weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids)
                 if verbose:
                     print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
-                features = sparse.vstack([features, features_sample], format="csr")
+                if isinstance(features, np.ndarray) \
+                    and isinstance(features_sample, np.ndarray):
+                    features = np.vstack([features, features_sample])
+                else:
+                    features = sparse.vstack([features, features_sample], format="csr")
                 outputs = np.concatenate((outputs, outputs_sample))
 
         yield features, outputs
@@ -549,7 +565,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
             sys.exit("Please provide a batch size that is a multiple of block size.")
         print('Extracting features from a batch of data of size {} block_size in {}'.format(size, block_size, table_name))
         return extract_batch_features(conn, table_name, size, block_size, datetime_onehot=datetime_onehot, 
-                    weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=True, super_boro=super_boro)
+                    weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=False, super_boro=super_boro)
     
     else:
         sys.exit("Type must be one of {'all', 'random', 'batch'}.")
