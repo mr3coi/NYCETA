@@ -23,4 +23,18 @@ BRIDGES = [
     # Queens to Bronx
     (252, 208),
     (15, 208),
+
+    # The following are not actual bridges,
+    # but instead exist to compensate for the lack
+    # of information on NJ
+    # Manhattan to EWR
+    (125, 1),
+    (246, 1),
+    (243, 1),
+    # EWR to Staten Island
+    (23, 1),
+    # Manhattan to Staten Island
+    (125, 187),
+    (246, 187),
+    (243, 187),
     ]
