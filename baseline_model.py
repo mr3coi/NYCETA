@@ -27,7 +27,8 @@ parser = argparse.ArgumentParser(
 
 # Model / Training
 parser.add_argument("-m", "--model", type=str, default="xgboost",
-                    choices = ["gbrt", "xgboost", "xgb_gridsearch", "save"],
+                    choices = ["gbrt", "xgboost", "xgb_cv",
+                               "xgb_gs", "save"],
                     help="Choose which baseline model to train "
                          "(default: xgboost)")
 parser.add_argument("-b", "--booster", type=str, default="gbtree",
@@ -165,9 +166,7 @@ def xgboost(features=None, outputs=None,
             booster="gbtree",
             subsample=1,
             max_depth=3,
-            rate_drop=None,
-            sample_type=None,
-            normalize_type=None,
+            dart_params=None,
             gpu=False,
             n_jobs=4,
             use_saved=False,
@@ -181,7 +180,18 @@ def xgboost(features=None, outputs=None,
     :features, outputs: The full dataset
     :loss_fn: The loss function to use during training
     :lr: Learning rate for XGBoost
+    :booster: Type of booster for each iteration
     :num_trees: The number of iterations (trees)
+    :subsample: The subsampling rate of rows
+    :max_depth: Maximum depth of each tree booster
+    :dart_params: Dictionary containing DART-booster-specific
+                  parameters
+    :gpu: Whether to use GPU to train or not
+    :n_jobs: When not using GPU, number of threads to use to train
+    :use_saved: Whether to use data already preprocessed and
+                saved to disk in the form of `xgb.DMatrix`
+                (run with `--model save` option first)
+    :save_path: The path to the stored `xgb.DMatrix`
     :verbose: Prints out the training loss at each iteration (tree)
     :returns: A dictionary containing the following:
         - "val_loss":       The final validation loss
@@ -214,9 +224,11 @@ def xgboost(features=None, outputs=None,
         if not gpu:
             params['n_jobs'] = n_jobs
         if booster == "dart":
-            params['rate_drop'] = rate_drop
-            params['sample_type'] = sample_type
-            params['normalize_type'] = normalize_type
+            assert dart_params is not None, \
+                "ERROR: Please provide DART-related parameters"
+            params['rate_drop'] = dart_params['rate_drop']
+            params['sample_type'] = dart_params['sample_type']
+            params['normalize_type'] = dart_params['normalize_type']
 
         model = xgb.XGBRegressor(**params)
         model.fit(f_train, o_train,
@@ -242,9 +254,11 @@ def xgboost(features=None, outputs=None,
             "eval_metric": loss,
         }
         if booster == "dart":
-            params['rate_drop'] = rate_drop
-            params['sample_type'] = sample_type
-            params['normalize_type'] = normalize_type
+            assert dart_params is not None, \
+                "ERROR: Please provide DART-related parameters"
+            params['rate_drop'] = dart_params['rate_drop']
+            params['sample_type'] = dart_params['sample_type']
+            params['normalize_type'] = dart_params['normalize_type']
 
         dtrain = xgb.DMatrix(save_path + '.train')
         dval = xgb.DMatrix(save_path + '.val')
@@ -382,10 +396,15 @@ def xgb_cv(features=None, outputs=None,
 
 def xgb_gridsearch(features, outputs,
                    param_grid,
-                   n_splits=10,
+                   nfold=10,
                    loss_fn="LSE",
                    lr=0.1,
                    num_trees=100,
+                   booster="gbtree",
+                   subsample=1,
+                   max_depth=3,
+                   gpu=False,
+                   n_jobs=4,
                    verbose=True):
     """Conducts K-fold CV for grid search on
     hyperparameters of XGBoost.
@@ -395,19 +414,16 @@ def xgb_gridsearch(features, outputs,
     memory issues depending on input size. Consider
     implementing np.array version of `save_dmatrix`
     function in `baseline_utils.py`.
+    Refer to `xgboost` for parameters not described below.
 
-    :features, outputs: The full dataset
-    :n_splits: Number of splits for K-fold CV
+    :features, outputs: The FULL dataset
+    :nfold: Number of splits for K-fold CV
     :param_grid: Dictionary where each entry is
         - key: Name of parameter
                (refer to 'xgb.XGBRegressor' for details)
         - value: A list or 1-D array of values to try
-    :loss_fn: The loss function to use during training
-    :lr: Learning rate for XGBoost
-    :num_trees: The number of iterations (trees) for XGBoost
-    :verbose: Prints out the training loss at each iteration (tree)
     :returns: A dictionary containing collected statistics.
-        Refer to 'sklearn.model_selection.GridSearchCV'
+        Refer to 'sklearn.model_selection.GridSearchCV' doc
         for details.
     """
     loss = {"LSE": "neg_mean_squared_error"}[loss_fn]
@@ -423,10 +439,12 @@ def xgb_gridsearch(features, outputs,
         "subsample": subsample,
         "max_depth": max_depth,
     }
+    if not gpu:
+        params['n_jobs'] = n_jobs
 
     model = xgb.XGBRegressor(**params)
 
-    kfold = StratifiedKFold(n_splits=n_splits, shuffle=True)
+    kfold = StratifiedKFold(n_splits=nfold, shuffle=True)
     grid_search = GridSearchCV(model, param_grid,
                                scoring=loss,
                                n_jobs=-1,
@@ -456,34 +474,43 @@ def main():
                              super_boro=SUPERBORO_CODE[parsed_args.superboro] \
                                         if parsed_args.superboro > 0 else None,
                             )
+    dart_params = {
+         "rate_drop":parsed_args.rate_drop,
+         "sample_type":parsed_args.sample_type,
+         "normalize_type":parsed_args.normalize_type,
+    } if parsed_args.booster == "dart" else None
+
+    xgb_params = {
+         "booster":parsed_args.booster,
+         "lr":parsed_args.learning_rate,
+         "num_trees":parsed_args.num_trees,
+         "max_depth":parsed_args.max_depth,
+         "subsample":parsed_args.subsample_rate,
+         "gpu":parsed_args.gpu,
+         "dart_params":dart_params,
+         "verbose":parsed_args.verbose,
+    }
+
+    # `xgb_gs` doesn't support `--use-saved`; see docs
+    if parsed_args.model != "xgb_gs":
+         xgb_params["use_saved"] = parsed_args.use_saved
+         xgb_params["save_path"] = parsed_args.save_path
 
     if parsed_args.model == "gbrt":
         result = gbrt(features, outputs, verbose=parsed_args.verbose)
+
     elif parsed_args.model == "xgboost":
         if not parsed_args.use_saved and parsed_args.verbose:
             data_parsed_time = time()
             print(">>> Data parsing complete, "
                   f"duration: {data_parsed_time - start_time} seconds")
-        params = {
-             "booster":parsed_args.booster,
-             "lr":parsed_args.learning_rate,
-             "num_trees":parsed_args.num_trees,
-             "max_depth":parsed_args.max_depth,
-             "verbose":parsed_args.verbose,
-             "subsample":parsed_args.subsample_rate,
-             "gpu":parsed_args.gpu,
-             "n_jobs":parsed_args.xgb_num_thread,
-             "use_saved":parsed_args.use_saved,
-             "save_path":parsed_args.save_path if parsed_args.use_saved else None,
-             "rate_drop":parsed_args.rate_drop,
-             "sample_type":parsed_args.sample_type,
-             "normalize_type":parsed_args.normalize_type,
-        }
+        params["n_jobs"] = parsed_args.xgb_num_thread
         result = xgboost(features if not parsed_args.use_saved else None,
                          outputs  if not parsed_args.use_saved else None,
                          **params,
                         )
-    elif parsed_args.model == "xgb_gridsearch":
+
+    elif parsed_args.model == "xgb_gs":
         if parsed_args.verbose:
             data_parsed_time = time()
             print(">>> Data parsing complete, "
@@ -493,11 +520,9 @@ def main():
         param_grid = {"subsample": np.linspace(0.1,1,10)}
 
         result = xgb_gridsearch(features, outputs,
-                                param_grid = param_grid,
-                                lr = parsed_args.learning_rate,
-                                num_trees = parsed_args.num_trees,
-                                verbose = parsed_args.verbose,
-                               )
+                                param_grid=param_grid,
+                                nfold=parsed_args.nfold,
+                                **xgb_params,)
         if parsed_args.verbose:
             print(result)
 
@@ -509,7 +534,7 @@ def main():
               Refer to 'GridSearchCV' in SKLearn for details
               on the output object.
         """
-        np.save("./cv_result.npy", result)
+        np.save("./gs_result.npy", result)
         conn.close()
         return
 
