@@ -14,6 +14,13 @@ from baseline_utils import create_dir, write_log, create_plot, save_dmatrix
 from obtain_features import *
 
 
+SUPERBORO_CODE = {
+    1: ["Bronx", "EWR", "Manhattan"],
+    2: ["Brooklyn", "Queens"],
+    3: ["Staten Island"],
+}
+
+
 parser = argparse.ArgumentParser(
             description="Configure baseline model and how to train it"
          )
@@ -83,6 +90,11 @@ parser.add_argument("--no-loc-id", dest='loc_id', action="store_false",
                     help="Let the zone IDs be excluded from the dataset")
 parser.add_argument("--test-size", type=float, default=0.1,
                     help="Proportion of validation set (default: 0.1)")
+parser.add_argument("-sb", "--superboro", type=int, default=0, choice=[1,2,3],
+                    help="Use subset of data only for a single super-borough "
+                         "specified by code, use all data if unspecified "
+                         "(1: Bronx, EWR, Manhattan | "
+                         "2: Brooklyn, Queens | 3: Staten Island)")
 
 # Logging / Output
 parser.add_argument("-v", "--verbose", action="store_true",
@@ -319,6 +331,8 @@ def main():
                              datetime_onehot=parsed_args.datetime_one_hot,
                              weekdays_onehot=parsed_args.weekdays_one_hot,
                              include_loc_ids=parsed_args.loc_id,
+                             super_boro=SUPERBORO_CODE[parsed_args.superboro] \
+                                        if parsed_args.superboro > 0 else None,
                             )
 
     if parsed_args.model == "gbrt":

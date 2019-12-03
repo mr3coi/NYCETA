@@ -51,7 +51,8 @@ def write_log(args, stats, dirname="logs"):
         log.write(f"datetime_one_hot: {args.datetime_one_hot}, "
                   f"weekdays_one_hot: {args.weekdays_one_hot}, "
                   f"loc_id: {args.loc_id}, "
-                  f"test_size: {args.test_size}")
+                  f"test_size: {args.test_size}\n")
+        log.write(f"superboro: {args.superboro}"
         log.write("\n\n")
 
         for tree_idx in range(args.num_trees):
@@ -141,6 +142,7 @@ def save_dmatrix(features, outputs, args, seed=None):
         save_name += "_locid"
     save_name += f"_s{seed}" if seed is not None else "_random"
     save_name += f"_test{args.test_size}"
+    save_name += f"_sb{args.superboro}"
 
     data_dirpath = create_dir("data")
     train_path = os.path.join(data_dirpath, save_name + '.train')
