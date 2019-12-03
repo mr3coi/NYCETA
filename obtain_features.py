@@ -291,10 +291,10 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         and a numpy array containing the corresponding values
         of the travel time
     """
-    if start_super_boro is not None and end_super_boro is None \
-            or end_super_boro is not None and start_super_boro is None:
-        print(('Either start_super_boro or end_super_boro was set without the other. '
-               'This is likely an error.'))
+    assert not (start_super_boro is not None and end_super_boro is None),\
+            'start_super_boro set without end_super_boro.'
+    assert not (start_super_boro is None and end_super_boro is not None),\
+            'end_super_boro set without start_super_boro.'
     offset = 0
     limit = 1e6
     batch_num = 0
@@ -382,10 +382,10 @@ def extract_random_data_features(conn, table_name, random_size,
         and a numpy array containing the corresponding values
         of the travel time
     """
-    if start_super_boro is not None and end_super_boro is None \
-            or end_super_boro is not None and start_super_boro is None:
-        print(('Either start_super_boro or end_super_boro was set without the other. '
-               'This is likely an error.'))
+    assert not (start_super_boro is not None and end_super_boro is None),\
+            'start_super_boro set without end_super_boro.'
+    assert not (start_super_boro is None and end_super_boro is not None),\
+            'end_super_boro set without start_super_boro.'
 
     cursor = conn.cursor()
 
@@ -451,10 +451,10 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
     :returns: a generator that yields each minibatch
         as a (features, outputs) pair.
     """
-    if start_super_boro is not None and end_super_boro is None \
-            or end_super_boro is not None and start_super_boro is None:
-        print(('Either start_super_boro or end_super_boro was set without the other. '
-               'This is likely an error.'))
+    assert not (start_super_boro is not None and end_super_boro is None),\
+            'start_super_boro set without end_super_boro.'
+    assert not (start_super_boro is None and end_super_boro is not None),\
+            'end_super_boro set without start_super_boro.'
 
     cursor = conn.cursor()
 
@@ -602,7 +602,8 @@ if __name__ == "__main__":
     con = create_connection(db_name)   
     # We have a total of 67302302 entries in the rides table 
     features_, outputs_ = extract_features(con, "rides", variant='random', size=10,
-                                           start_super_boro=['Manhattan', 'Bronx', 'EWR'], end_super_boro=['Brooklyn', 'Queens'],
+                                           start_super_boro=['Manhattan', 'Bronx', 'EWR'],
+                                           end_super_boro=['Brooklyn', 'Queens'],
                                            datetime_onehot=False,
                                            weekdays_onehot=False,
                                            include_loc_ids=False)
