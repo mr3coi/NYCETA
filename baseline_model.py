@@ -43,6 +43,8 @@ parser.add_argument("-lr", "--learning-rate", type=float, default=0.1,
 parser.add_argument("-ssr", "--subsample-rate", type=float, default=1,
                     help="Subsampling rate for rows. "
                          "Must be between 0 and 1.")
+parser.add_argument("--nfold", type=int, default=10,
+                    help="The number of folds for k-fold CV")
 
 # DART-specific
 parser.add_argument("--rate-drop", type=float, default=0.1,
@@ -270,6 +272,114 @@ def xgboost(features=None, outputs=None,
     return result
 
 
+def xgb_cv(features=None, outputs=None,
+           nfold=10,
+           loss_fn="LSE",
+           lr=0.1,
+           num_trees=100,
+           booster="gbtree",
+           subsample=1,
+           max_depth=3,
+           dart_params=None,
+           gpu=False,
+           use_saved=False,
+           save_path=None,
+           seed=None,
+           verbose=False):
+    """Trains and conducts CV over an XGBoost GBRT,
+    and reports statistics from the training process.
+    No separate validation dataset is provided.
+    Refer to `xgboost` for parameters not described below.
+
+    :features, outputs: The FULL dataset
+    :nfold: Number of folds for K-fold CV
+    :returns: A dictionary containing the following:
+        - "val_loss":       The final validation loss
+        - "val_losses":     The validation loss after each iteration
+        - "train_losses":   The training loss after each iteration
+    """
+    loss = {"LSE": "rmse"}[loss_fn]
+    objective = {"LSE": "reg:squarederror"}[loss_fn]
+
+    if not use_saved:
+        assert features is not None and outputs is not None, \
+            "ERROR: Please provide `features` or `outputs`."
+        dtrain = xgb.DMatrix(features, label=outputs)
+
+        params = {
+            "tree_method": "gpu_hist" if gpu else "approx",
+            "booster": booster,
+            "objective": objective,
+            "learning_rate": lr,
+            "verbosity": 2 if verbose else 1,
+            "subsample": subsample,
+            "max_depth": max_depth,
+            "eval_metric": loss,
+        }
+        if booster == "dart":
+            assert dart_params is not None, \
+                "ERROR: Please provide DART-related parameters"
+            params['rate_drop'] = dart_params['rate_drop']
+            params['sample_type'] = dart_params['sample_type']
+            params['normalize_type'] = dart_params['normalize_type']
+
+        cv_result = xgb.cv(params, dtrain,
+                           num_boost_round=num_trees,
+                           nfold=nfold,
+                           metrics=[loss],
+                           shuffle=True,
+                           seed=seed,
+                           early_stopping_rounds=10,
+                           verbose_eval=verbose,
+                           show_stdv=verbose,
+                           as_pandas=False,
+                          )
+
+    else:
+        assert save_path is not None, \
+            "ERROR: Need to provide 'save_path'."
+        params = {
+            "tree_method": "gpu_hist" if gpu else "approx",
+            "booster": booster,
+            "objective": objective,
+            "learning_rate": lr,
+            "verbosity": 2 if verbose else 1,
+            "subsample": subsample,
+            "max_depth": max_depth,
+            "eval_metric": loss,
+        }
+        if booster == "dart":
+            assert dart_params is not None, \
+                "ERROR: Please provide DART-related parameters"
+            params["rate_drop"] = dart_params["rate_drop"]
+            params["sample_type"] = dart_params["sample_type"]
+            params["normalize_type"] = dart_params["normalize_type"]
+
+        dtrain = xgb.DMatrix(save_path + ".train")
+
+        cv_result = xgb.cv(params, dtrain,
+                           num_boost_round=num_trees,
+                           nfold=nfold,
+                           metrics=[loss],
+                           shuffle=True,
+                           seed=seed,
+                           early_stopping_rounds=10,
+                           verbose_eval=verbose,
+                           show_stdv=verbose,
+                           as_pandas=False,
+                          )
+
+    if verbose:
+        print(">>> Model training complete")
+
+    train_losses = cv_result[f"train-{loss}-mean"]
+    val_losses   = cv_result[f"test-{loss}-mean"]
+    train_losses_std = cv_result[f"train-{loss}-std"]
+    val_losses_std   = cv_result[f"test-{loss}-std"]
+    result = {}
+    return result
+
+
 def xgb_gridsearch(features, outputs,
                    param_grid,
                    n_splits=10,
@@ -402,6 +512,18 @@ def main():
         np.save("./cv_result.npy", result)
         conn.close()
         return
+
+    elif parsed_args.model == "xgb_cv":
+        if not parsed_args.use_saved and parsed_args.verbose:
+            data_parsed_time = time()
+            print(">>> Data parsing complete, "
+                  f"duration: {data_parsed_time - start_time} seconds")
+        result = xgb_cv(features if not parsed_args.use_saved else None,
+                        outputs  if not parsed_args.use_saved else None,
+                        nfold=parsed_args.nfold,
+                        seed=10701,
+                        **xgb_params,
+                       )
     elif parsed_args.model == "save":
         save_dmatrix(features, outputs, parsed_args, seed=10701)
         return
