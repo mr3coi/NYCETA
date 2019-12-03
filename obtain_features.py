@@ -380,7 +380,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         
         rows = np.array(cursor.fetchall())
         if len(rows) == 0:
-            break
+            continue
 
         print("Extracting features from the read data")
         if offset == 0:
@@ -566,7 +566,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
 
             rows = np.array(cursor.fetchall())
             if len(rows) == 0:
-                break
+                continue
             if verbose:
                 print(f">>> Time taken for query: {time() - query_start} seconds")
 
