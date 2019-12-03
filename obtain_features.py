@@ -239,8 +239,37 @@ def list_to_quoted_string(l):
     return ', '.join(with_quotes)
 
 
+def filter_for_boros(command, start_super_boro, end_super_boro):
+    """Modifies an input command to only return commands either
+    starting in start_super_boro and ending in end_super_boro,
+    or the reverse
+
+    :command: the input command
+    :start_super_boro: one of the super boros
+    :end_super_boro: the other super boro
+    :returns: the modified command
+    """
+    start_boro_string = list_to_quoted_string(start_super_boro)
+    end_boro_string = list_to_quoted_string(end_super_boro)
+
+    command = ('SELECT r.tpep_pickup_datetime, r.tpep_dropoff_datetime, '
+               'r.PULocationID, r.DOLocationID '
+               'FROM (') + command + (
+                   ') r, '
+                   'locations l1, locations l2 '
+                   'WHERE l1.LocationID = r.PULocationID '
+                   'AND l2.LocationID = r.DOLocationID '
+                   f'AND (l1.Borough in ({start_boro_string}) '
+                   f'AND l2.Borough in ({end_boro_string})) '
+                   f'OR (l2.Borough in ({start_boro_string}) '
+                   f'AND l1.Borough in ({end_boro_string}))'
+                   )
+
+    return command
+
+
 def extract_all_features(conn, table_name, coords_table_name='coordinates', boros_table_name='locations',
-    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, super_boro=None):
+    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None, end_super_boro=None):
     """Extracts the features from all the data entries 
     in the given table of the database
 
@@ -254,12 +283,18 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         day of the week value, or a single index one
     :include_loc_ids: boolean for whether to include locIds as one-hot
         in the feature vectors, or not 
-    :super_boro: if not None, a list of strings representing the boros that all rides should
-        start and end in
+    :start_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, end_super_boro should also not be None.
+    :end_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, start_super_boro should also not be None.
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
     """
+    if start_super_boro is not None and end_super_boro is None \
+            or end_super_boro is not None and start_super_boro is None:
+        print(('Either start_super_boro or end_super_boro was set without the other. '
+               'This is likely an error.'))
     offset = 0
     limit = 1e6
     batch_num = 0
@@ -283,17 +318,8 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                    f'LIMIT {limit} '
                    f'OFFSET {offset}')
 
-        if super_boro is not None:
-            boro_string = list_to_quoted_string(super_boro)
-            command = ('SELECT r.tpep_pickup_datetime, r.tpep_dropoff_datetime, '
-                       'r.PULocationID, r.DOLocationID '
-                       'FROM (') + command + (
-                           ') r, '
-                           'locations l1, locations l2 '
-                           'WHERE l1.LocationID = r.PULocationID '
-                           'AND l2.LocationID = r.DOLocationID '
-                           f'AND l1.Borough in ({boro_string}) '
-                           f'AND l2.Borough in ({boro_string})')
+        if start_super_boro is not None and end_super_boro is not None:
+            command = filter_for_boros(command, start_super_boro, end_super_boro)
         
         try:
             cursor.execute(command)
@@ -333,7 +359,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
 
 def extract_random_data_features(conn, table_name, random_size, 
     coords_table_name='coordinates', boros_table_name='locations', 
-    super_boro=None, datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True):
+    start_super_boro=None, end_super_boro=None, datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True):
     """Extracts the features from a random batch of data 
     from the table of the database
 
@@ -342,8 +368,10 @@ def extract_random_data_features(conn, table_name, random_size,
     :random_size: the size of the random batch to be taken
     :coords_table_name: name of the table holding the coordinates data
     :boros_table_name: name of the table holding the boroughs data
-    :super_boro: if not None, a list of strings representing the boros that all rides should
-        start and end in
+    :start_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, end_super_boro should also not be None.
+    :end_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, start_super_boro should also not be None.
     :datetime_onehot: boolean for whether we want a onehot represnetation for
         date and time values, or a single index one
     :weekdays_onehot: boolean for whether we want a onehot represnetation for
@@ -354,6 +382,11 @@ def extract_random_data_features(conn, table_name, random_size,
         and a numpy array containing the corresponding values
         of the travel time
     """
+    if start_super_boro is not None and end_super_boro is None \
+            or end_super_boro is not None and start_super_boro is None:
+        print(('Either start_super_boro or end_super_boro was set without the other. '
+               'This is likely an error.'))
+
     cursor = conn.cursor()
 
     # extracting coordinates of all 
@@ -369,18 +402,9 @@ def extract_random_data_features(conn, table_name, random_size,
                f'AND DOLocationID < 264 '
                'ORDER BY RANDOM() '
                f'LIMIT {random_size}')
-    if super_boro is not None:
-        boro_string = list_to_quoted_string(super_boro)
-        command = ('SELECT r.tpep_pickup_datetime, r.tpep_dropoff_datetime, '
-                   'r.PULocationID, r.DOLocationID '
-                   'FROM (') + command + (
-                       ') r, '
-                       'locations l1, locations l2 '
-                       'WHERE l1.LocationID = r.PULocationID '
-                       'AND l2.LocationID = r.DOLocationID '
-                       f'AND l1.Borough in ({boro_string}) '
-                       f'AND l2.Borough in ({boro_string})')
-        print(command)
+
+    if start_super_boro is not None and end_super_boro is not None:
+        command = filter_for_boros(command, start_super_boro, end_super_boro)
 
     print('Reading data entries from the table in the database')
     try:
@@ -400,7 +424,7 @@ def extract_random_data_features(conn, table_name, random_size,
 def extract_batch_features(conn, table_name, batch_size, block_size,
     coords_table_name='coordinates', boros_table_name='locations',
     datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True,
-    replace_blk=False, verbose=False, super_boro=None):
+    replace_blk=False, verbose=False, start_super_boro=None, end_super_boro=None):
     """Extracts the features from a batch of data
     from the table of the database, without shuffling
 
@@ -420,11 +444,18 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
     :replace_blk: whether to sample blocks with/without replacement
         when forming a minibatch
     :verbose: whether to print out progress onto stdout
-    :super_boro: if not None, a list of strings representing the boros that all rides should
-        start and end in
+    :start_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, end_super_boro should also not be None.
+    :end_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, start_super_boro should also not be None.
     :returns: a generator that yields each minibatch
         as a (features, outputs) pair.
     """
+    if start_super_boro is not None and end_super_boro is None \
+            or end_super_boro is not None and start_super_boro is None:
+        print(('Either start_super_boro or end_super_boro was set without the other. '
+               'This is likely an error.'))
+
     cursor = conn.cursor()
 
     # extracting coordinates of all locations
@@ -469,17 +500,8 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                        f'LIMIT {block_size} '
                        f'OFFSET {blk_idx * block_size}')
 
-            if super_boro is not None:
-                boro_string = list_to_quoted_string(super_boro)
-                command = ('SELECT r.tpep_pickup_datetime, r.tpep_dropoff_datetime, '
-                           'r.PULocationID, r.DOLocationID '
-                           'FROM (') + command + (
-                               ') r, '
-                               'locations l1, locations l2 '
-                               'WHERE l1.LocationID = r.PULocationID '
-                               'AND l2.LocationID = r.DOLocationID '
-                               f'AND l1.Borough in ({boro_string}) '
-                               f'AND l2.Borough in ({boro_string})')
+            if start_super_boro is not None and end_super_boro is not None:
+                command = filter_for_boros(command, start_super_boro, end_super_boro)
 
             query_start = time()
             try:
@@ -515,7 +537,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
 
 
 def extract_features(conn, table_name, variant='all', size=None, block_size=None, 
-    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, super_boro=None):
+    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None, end_super_boro=None):
     """Reads the data from the database and obtains the features
 
     :conn: connection object to the database
@@ -537,8 +559,10 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         day of the week value, or a single index one
     :include_loc_ids: boolean for whether to include locIds as one-hot
         in the feature vectors, or not 
-    :super_boro: if not None, a list of strings representing the boros that all rides should
-        start and end in
+    :start_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, end_super_boro should also not be None.
+    :end_super_boro: if not None, a list of strings representing the boros that all rides should
+        start and end in. If not None, start_super_boro should also not be None.
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -546,14 +570,14 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
     if variant == 'all':
         print('Extracting features from all the data in {}'.format(table_name))
         features, outputs = extract_all_features(conn, table_name, datetime_onehot=datetime_onehot, 
-                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, super_boro=super_boro)
+                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro, end_super_boro=end_super_boro)
 
     elif variant == 'random':
         if not isinstance(size, int):
             print('Please provide an integer size for the random batch.')
         print('Extracting features from a random batch of data of size {} in {}'.format(size, table_name))
         features, outputs = extract_random_data_features(conn, table_name, size, datetime_onehot=datetime_onehot, 
-                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, super_boro=super_boro)
+                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro, end_super_boro=end_super_boro)
 
     elif variant == 'batch':
         if size is None:
@@ -563,8 +587,9 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         if size % block_size > 0:
             sys.exit("Please provide a batch size that is a multiple of block size.")
         print('Extracting features from a batch of data of size {} block_size in {}'.format(size, block_size, table_name))
-        return extract_batch_features(conn, table_name, size, block_size, datetime_onehot=datetime_onehot, 
-                    weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=False, super_boro=super_boro)
+        return extract_batch_features(conn, table_name, size, block_size, datetime_onehot=datetime_onehot,
+                    weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=False,
+                    start_super_boro=start_super_boro, end_super_boro=end_super_boro)
     
     else:
         sys.exit("Type must be one of {'all', 'random', 'batch'}.")
@@ -576,10 +601,11 @@ if __name__ == "__main__":
     db_name = "rides.db" 
     con = create_connection(db_name)   
     # We have a total of 67302302 entries in the rides table 
-    features_, outputs_ = extract_features(con, "rides", variant='all', size=10, super_boro=['Manhattan', 'Bronx', 'EWR'],
-                                                datetime_onehot=False, 
-                                                weekdays_onehot=False, 
-                                                include_loc_ids=False)
+    features_, outputs_ = extract_features(con, "rides", variant='random', size=10,
+                                           start_super_boro=['Manhattan', 'Bronx', 'EWR'], end_super_boro=['Brooklyn', 'Queens'],
+                                           datetime_onehot=False,
+                                           weekdays_onehot=False,
+                                           include_loc_ids=False)
     # for idx, (features_, outputs_) in enumerate(extract_features(con, "rides", variant='batch', size=100000, block_size=1000)):
         # print(f'Batch {idx}) features: {features_.shape}, outputs: {outputs_.shape}')
         # break
