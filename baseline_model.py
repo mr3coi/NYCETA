@@ -27,7 +27,7 @@ parser = argparse.ArgumentParser(
 
 # Model / Training
 parser.add_argument("-m", "--model", type=str, default="xgboost",
-                    choices = ["gbrt", "xgboost", "xgboost_cv", "save"],
+                    choices = ["gbrt", "xgboost", "xgb_gridsearch", "save"],
                     help="Choose which baseline model to train "
                          "(default: xgboost)")
 parser.add_argument("-b", "--booster", type=str, default="gbtree",
@@ -171,8 +171,10 @@ def xgboost(features=None, outputs=None,
             use_saved=False,
             save_path=None,
             verbose=True):
-    """Trains and validates a XGBoost GBRT using the given dataset,
-    and reports statistics from training process.
+    """Trains an XGBoost GBRT and validates it with a
+    holdout, where both training and holdout validation
+    datasets are splitted from the given dataset,
+    and reports statistics from the training process.
 
     :features, outputs: The full dataset
     :loss_fn: The loss function to use during training
@@ -268,15 +270,21 @@ def xgboost(features=None, outputs=None,
     return result
 
 
-def xgboost_cv(features, outputs,
-               param_grid,
-               n_splits=10,
-               loss_fn="LSE",
-               lr=0.1,
-               num_trees=100,
-               verbose=True):
+def xgb_gridsearch(features, outputs,
+                   param_grid,
+                   n_splits=10,
+                   loss_fn="LSE",
+                   lr=0.1,
+                   num_trees=100,
+                   verbose=True):
     """Conducts K-fold CV for grid search on
     hyperparameters of XGBoost.
+    NOTE) This does NOT support `--use-saved' option
+    and ONLY supports passing in data as np.arrays
+    or sparse arrays. Hence, this may suffer from
+    memory issues depending on input size. Consider
+    implementing np.array version of `save_dmatrix`
+    function in `baseline_utils.py`.
 
     :features, outputs: The full dataset
     :n_splits: Number of splits for K-fold CV
@@ -300,6 +308,10 @@ def xgboost_cv(features, outputs,
         "objective": objective,
         "learning_rate": lr,
         "verbosity": 2 if verbose else 1,
+        "tree_method": "gpu_hist" if gpu else "approx",
+        "booster": booster,
+        "subsample": subsample,
+        "max_depth": max_depth,
     }
 
     model = xgb.XGBRegressor(**params)
@@ -361,7 +373,7 @@ def main():
                          outputs  if not parsed_args.use_saved else None,
                          **params,
                         )
-    elif parsed_args.model == "xgboost_cv":
+    elif parsed_args.model == "xgb_gridsearch":
         if parsed_args.verbose:
             data_parsed_time = time()
             print(">>> Data parsing complete, "
@@ -370,12 +382,12 @@ def main():
         # Set up parameter values to do grid-search over here
         param_grid = {"subsample": np.linspace(0.1,1,10)}
 
-        result = xgboost_cv(features, outputs,
-                            param_grid = param_grid,
-                            lr = parsed_args.learning_rate,
-                            num_trees = parsed_args.num_trees,
-                            verbose = parsed_args.verbose,
-                           )
+        result = xgb_gridsearch(features, outputs,
+                                param_grid = param_grid,
+                                lr = parsed_args.learning_rate,
+                                num_trees = parsed_args.num_trees,
+                                verbose = parsed_args.verbose,
+                               )
         if parsed_args.verbose:
             print(result)
 
