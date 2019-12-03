@@ -52,7 +52,7 @@ def write_log(args, stats, dirname="logs"):
                   f"weekdays_one_hot: {args.weekdays_one_hot}, "
                   f"loc_id: {args.loc_id}, "
                   f"test_size: {args.test_size}\n")
-        log.write(f"superboro: {args.superboro}"
+        log.write(f"superboro: {args.superboro}")
         log.write("\n\n")
 
         for tree_idx in range(args.num_trees):
@@ -134,6 +134,8 @@ def save_dmatrix(features, outputs, args, seed=None):
     """
     # Record configurations in dataset name
     save_name = "dm"
+    save_name += f"_sb{args.superboro}"
+    save_name += f"_test{args.test_size}"
     if args.datetime_one_hot:
         save_name += "_doh"
     if args.weekdays_one_hot:
@@ -141,26 +143,29 @@ def save_dmatrix(features, outputs, args, seed=None):
     if args.loc_id:
         save_name += "_locid"
     save_name += f"_s{seed}" if seed is not None else "_random"
-    save_name += f"_test{args.test_size}"
-    save_name += f"_sb{args.superboro}"
 
     data_dirpath = create_dir("data")
     train_path = os.path.join(data_dirpath, save_name + '.train')
     val_path = os.path.join(data_dirpath, save_name + '.val')
 
     # Split data with specified `test_size`
-    f_train, f_val, o_train, o_val = \
-        train_test_split(features, outputs,
-                         test_size=args.test_size,
-                         shuffle=True,
-                         random_state=seed,)
+    if args.test_size > 0:
+        f_train, f_val, o_train, o_val = \
+            train_test_split(features, outputs,
+                             test_size=args.test_size,
+                             shuffle=True,
+                             random_state=seed,)
+    else:
+        f_train, o_train = features, outputs
 
     # Store DMatrices
     dtrain = xgb.DMatrix(f_train, label=o_train)
-    dval = xgb.DMatrix(f_val, label=o_val)
+    if args.test_size > 0:
+        dval = xgb.DMatrix(f_val, label=o_val)
     if args.verbose:
         print(">>> Conversion to DMatrix complete")
     dtrain.save_binary(train_path)
-    dval.save_binary(val_path)
+    if args.test_size > 0:
+        dval.save_binary(val_path)
     if args.verbose:
         print(">>> DMatrices saved to disk")
