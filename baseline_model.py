@@ -90,7 +90,7 @@ parser.add_argument("--no-loc-id", dest='loc_id', action="store_false",
                     help="Let the zone IDs be excluded from the dataset")
 parser.add_argument("--test-size", type=float, default=0.1,
                     help="Proportion of validation set (default: 0.1)")
-parser.add_argument("-sb", "--superboro", type=int, default=0, choice=[1,2,3],
+parser.add_argument("-sb", "--superboro", type=int, default=0, choices=[1,2,3],
                     help="Use subset of data only for a single super-borough "
                          "specified by code, use all data if unspecified "
                          "(1: Bronx, EWR, Manhattan | "
