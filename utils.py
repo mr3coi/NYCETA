@@ -8,6 +8,7 @@ def create_connection(db_file, check_same_thread=True):
     :return: Connection object or None
     """
     conn = None
+    print(db_file)
     try:
         conn = sqlite3.connect(db_file, check_same_thread=check_same_thread)
     except sqlite3.Error as error:
