@@ -210,12 +210,12 @@ def get_naive_features(rows, coords, boros, maxLocID=263, datetime_onehot=True,
     if include_loc_ids:
         PULocID = get_one_hot(PULocID, 1, maxLocID)
         DOLocID = get_one_hot(DOLocID, 1, maxLocID)
-        feature_vectors = sparse.hstack([PUDatetime, PUCoords, DOCoords, 
-            PUBoroughs, DOBoroughs, PULocID, DOLocID], format="csr")
+        feature_vectors = sparse.hstack([PULocID, PUCoords, PUBoroughs, 
+            DOLocID, DOCoords, DOBoroughs, PUDatetime], format="csr")
     elif datetime_onehot or weekdays_onehot:
-        feature_vectors = sparse.hstack([PUDatetime, PUCoords, DOCoords, PUBoroughs, DOBoroughs], format="csr")
+        feature_vectors = sparse.hstack([PUCoords, PUBoroughs, DOCoords, DOBoroughs, PUDatetime], format="csr")
     else:
-        feature_vectors = np.hstack([PUDatetime, PUCoords, DOCoords, PUBoroughs, DOBoroughs])
+        feature_vectors = np.hstack([PUCoords, PUBoroughs, DOCoords, DOBoroughs, PUDatetime])
 
     delta = np.array([datetime.timedelta(
         days=d_datetime[0][i]-p_datetime[0][i],
@@ -354,9 +354,17 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
     # extracting boroughs for all locations
     boros = extract_all_boroughs(conn, boros_table_name)
 
+    count_cmd = (f'SELECT COUNT(PULocationID) FROM {table_name} ')
+    try:
+        cursor.execute(count_cmd)
+    except Error as e:
+        print(e)
+    NUM_ROWS = cursor.fetchone()[0]
+    assert type(NUM_ROWS) is int, f'cursor.fetchone() has returned {type(NUM_ROWS)} instead of an int.'
+
     print("Extracting data in batches of size {}".format(limit))
     stop_condition = False
-    while True:
+    while batch_num*limit < NUM_ROWS:
         print("Reading data for batch number {}".format(batch_num))
         command = ('SELECT tpep_pickup_datetime, tpep_dropoff_datetime, '
                    'PULocationID, DOLocationID '
@@ -378,8 +386,11 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         if stop_condition:
             break
         
+        batch_num += 1
+        
         rows = np.array(cursor.fetchall())
         if len(rows) == 0:
+            offset += limit
             continue
 
         print("Extracting features from the read data")
@@ -401,9 +412,8 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
             else:
                 features = sparse.vstack([features, features_sample], format="csr")
             outputs = np.concatenate((outputs, outputs_sample))
-
-        batch_num += 1
         offset += limit
+
     return features, outputs
 
 
