@@ -1,7 +1,6 @@
 # pragma pylint: disable=C0103, C0303
 import sqlite3
 from sqlite3 import Error
-import pandas as pd
 import sys
 import datetime
 import numpy as np
@@ -299,7 +298,6 @@ def get_significant_data(features, values, cutoff):
     :cutoff: a cutoff for the output values
     :returns: significant data points
     """
-    del_indices = []
     typeflag = False
 
     if not isinstance(features, np.ndarray):
