@@ -306,12 +306,8 @@ def get_significant_data(features, values, cutoff):
         features = features.toarray()
         typeflag = True
 
-    for i, value in enumerate(values):
-        if value >= cutoff:
-            del_indices.append(i)
-
-    features = np.delete(features, del_indices, 0)
-    values = np.delete(values, del_indices, 0)
+    features = features[values <= cutoff]
+    values = values[values <= cutoff]
 
     if typeflag:
         features = sparse.csr_matrix(features)
