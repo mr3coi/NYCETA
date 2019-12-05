@@ -271,6 +271,7 @@ def xgboost(features=None, outputs=None,
                           evals=watchlist,
                           verbose_eval=verbose,
                           evals_result=evals_result,
+                          early_stopping_rounds=10,
                          )
 
         train_losses = evals_result["train"][loss] # 1st arg in `eval_set`
@@ -504,10 +505,10 @@ def main():
             data_parsed_time = time()
             print(">>> Data parsing complete, "
                   f"duration: {data_parsed_time - start_time} seconds")
-        params["n_jobs"] = parsed_args.xgb_num_thread
+        xgb_params["n_jobs"] = parsed_args.xgb_num_thread
         result = xgboost(features if not parsed_args.use_saved else None,
                          outputs  if not parsed_args.use_saved else None,
-                         **params,
+                         **xgb_params,
                         )
 
     elif parsed_args.model == "xgb_gs":
