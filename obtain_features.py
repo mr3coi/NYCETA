@@ -1,6 +1,7 @@
 # pragma pylint: disable=C0103, C0303
 import sqlite3
 from sqlite3 import Error
+import pandas as pd
 import sys
 import datetime
 import numpy as np
@@ -268,8 +269,63 @@ def filter_for_boros(command, start_super_boro, end_super_boro):
     return command
 
 
+def get_cutoff_value(n, datacsv="./data_analysis/multiplier_tbl.csv"):
+    """Get the cutoff value for the output
+    to be significant
+
+    :n: the number of std_deviations to add to the mean
+    :datacsv: the csv file holding all the data
+    :return: the cutoff value
+    """
+    data_table = np.loadtxt(datacsv, delimiter=',', skiprows=1, usecols=(0,1))
+    print(data_table)
+    cv = -1
+    for entry in data_table:
+        if entry[0] == n:
+            cv = entry[1]
+            break
+    if cv == -1:
+        print("Didn't find required multiplier in given CSV. Terminating.")
+        exit(1)
+    return cv
+
+
+def get_significant_data(features, values, cutoff):
+    """Get only the data points that are significant,
+    i.e. where outputs value is less equal than cutoff.
+    
+    :features: np array of scipy sparse matrix for features
+    :values: np array of output values
+    :cutoff: a cutoff for the output values
+    :returns: significant data points
+    """
+    del_indices = []
+    typeflag = False
+
+    print(features.shape, values, cutoff)
+    
+    if not isinstance(features, np.ndarray):
+        features = features.toarray()
+        typeflag = True
+
+    for i, value in enumerate(values):
+        if value >= cutoff:
+            del_indices.append(i)
+
+    features = np.delete(features, del_indices, 0)
+    values = np.delete(values, del_indices, 0)
+
+    if typeflag:
+        features = sparse.csr_matrix(features)
+
+    print(features.shape, values)
+    return features, values
+
+
+
 def extract_all_features(conn, table_name, coords_table_name='coordinates', boros_table_name='locations',
-    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None, end_super_boro=None):
+    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None,
+    end_super_boro=None, cutoff_val=1e5):
     """Extracts the features from all the data entries 
     in the given table of the database
 
@@ -287,6 +343,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         start and end in. If not None, end_super_boro should also not be None.
     :end_super_boro: if not None, a list of strings representing the boros that all rides should
         start and end in. If not None, start_super_boro should also not be None.
+    :cutoff_val: the cutoff value for an output to be significant
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -340,11 +397,13 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                                     datetime_onehot=datetime_onehot, 
                                     weekdays_onehot=weekdays_onehot, 
                                     include_loc_ids=include_loc_ids)
+            features, outputs = get_significant_data(features, outputs, cutoff_val)
         else:
             features_sample, outputs_sample = get_naive_features(rows, coords, boros, 
                                                 datetime_onehot=datetime_onehot, 
                                                 weekdays_onehot=weekdays_onehot, 
                                                 include_loc_ids=include_loc_ids)
+            features_sample, outputs_sample = get_significant_data(features_sample, outputs_sample, cutoff_value)
             if isinstance(features, np.ndarray) \
                 and isinstance(features_sample, np.ndarray):
                 features = np.vstack([features, features_sample])
@@ -359,7 +418,8 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
 
 def extract_random_data_features(conn, table_name, random_size, 
     coords_table_name='coordinates', boros_table_name='locations', 
-    start_super_boro=None, end_super_boro=None, datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True):
+    start_super_boro=None, end_super_boro=None, datetime_onehot=True, weekdays_onehot=True, 
+    include_loc_ids=True, cutoff_val=1e5):
     """Extracts the features from a random batch of data 
     from the table of the database
 
@@ -378,6 +438,7 @@ def extract_random_data_features(conn, table_name, random_size,
         day of the week value, or a single index one
     :include_loc_ids: boolean for whether to include locIds as one-hot
         in the feature vectors, or not 
+    :cutoff_val: the cutoff value for an output to be significant
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -388,6 +449,8 @@ def extract_random_data_features(conn, table_name, random_size,
             'end_super_boro set without start_super_boro.'
 
     cursor = conn.cursor()
+
+    print(random_size)
 
     # extracting coordinates of all 
     coords = extract_all_coordinates(conn, coords_table_name)
@@ -413,18 +476,22 @@ def extract_random_data_features(conn, table_name, random_size,
         print(e)
 
     rows = np.array(cursor.fetchall())
+    print(len(rows))
+    print("ggggggggggg")
 
     print("Making feature vectors from the extracted data")
     features, outputs = get_naive_features(rows, coords, boros, datetime_onehot=datetime_onehot, 
                             weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids)
 
+    features, outputs = get_significant_data(features, outputs, cutoff_val)
     return features, outputs
 
 
 def extract_batch_features(conn, table_name, batch_size, block_size,
     coords_table_name='coordinates', boros_table_name='locations',
     datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True,
-    replace_blk=False, verbose=False, start_super_boro=None, end_super_boro=None):
+    replace_blk=False, verbose=False, start_super_boro=None,
+    end_super_boro=None, cutoff_val=1e5):
     """Extracts the features from a batch of data
     from the table of the database, without shuffling
 
@@ -448,6 +515,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
         start and end in. If not None, end_super_boro should also not be None.
     :end_super_boro: if not None, a list of strings representing the boros that all rides should
         start and end in. If not None, start_super_boro should also not be None.
+    :cutoff_val: the cutoff value for an output to be significant
     :returns: a generator that yields each minibatch
         as a (features, outputs) pair.
     """
@@ -533,11 +601,13 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                     features = sparse.vstack([features, features_sample], format="csr")
                 outputs = np.concatenate((outputs, outputs_sample))
 
+        features, outputs = get_significant_data(features, outputs, cutoff_val)
         yield features, outputs
 
 
 def extract_features(conn, table_name, variant='all', size=None, block_size=None, 
-    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None, end_super_boro=None):
+    datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None, 
+    end_super_boro=None, stddev_multiplier=1, cutoff_data_csv='./data_analysis/multiplier_tbl.csv'):
     """Reads the data from the database and obtains the features
 
     :conn: connection object to the database
@@ -563,21 +633,28 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         start and end in. If not None, end_super_boro should also not be None.
     :end_super_boro: if not None, a list of strings representing the boros that all rides should
         start and end in. If not None, start_super_boro should also not be None.
+    :stddev_multiplier: the number of std devs to be taken around the mean
+    :cutoff_data_csv: the csv file containing the cutoff for different multiplier values
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
     """
+
+    cutoff_val = get_cutoff_value(stddev_multiplier, cutoff_data_csv)
+
     if variant == 'all':
         print('Extracting features from all the data in {}'.format(table_name))
         features, outputs = extract_all_features(conn, table_name, datetime_onehot=datetime_onehot, 
-                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro, end_super_boro=end_super_boro)
+                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro, 
+                                end_super_boro=end_super_boro, cutoff_val=cutoff_val)
 
     elif variant == 'random':
         if not isinstance(size, int):
             print('Please provide an integer size for the random batch.')
         print('Extracting features from a random batch of data of size {} in {}'.format(size, table_name))
         features, outputs = extract_random_data_features(conn, table_name, size, datetime_onehot=datetime_onehot, 
-                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro, end_super_boro=end_super_boro)
+                                weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro,
+                                end_super_boro=end_super_boro, cutoff_val=cutoff_val)
 
     elif variant == 'batch':
         if size is None:
@@ -589,7 +666,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         print('Extracting features from a batch of data of size {} block_size in {}'.format(size, block_size, table_name))
         return extract_batch_features(conn, table_name, size, block_size, datetime_onehot=datetime_onehot,
                     weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=False,
-                    start_super_boro=start_super_boro, end_super_boro=end_super_boro)
+                    start_super_boro=start_super_boro, end_super_boro=end_super_boro, cutoff_val=cutoff_val)
     
     else:
         sys.exit("Type must be one of {'all', 'random', 'batch'}.")
@@ -604,12 +681,15 @@ if __name__ == "__main__":
     features_, outputs_ = extract_features(con, "rides", variant='random', size=10,
                                            start_super_boro=['Manhattan', 'Bronx', 'EWR'],
                                            end_super_boro=['Brooklyn', 'Queens'],
-                                           datetime_onehot=False,
-                                           weekdays_onehot=False,
-                                           include_loc_ids=False)
+                                           datetime_onehot=False, weekdays_onehot=False,
+                                           include_loc_ids=False, stddev_multiplier=1)
     # for idx, (features_, outputs_) in enumerate(extract_features(con, "rides", variant='batch', size=100000, block_size=1000)):
         # print(f'Batch {idx}) features: {features_.shape}, outputs: {outputs_.shape}')
         # break
     # extract_all_coordinates(con, 'coordinates')
+    
+    # cv = get_cutoff_value(1)
+    # print(cv)
+
     print(features_.shape)
 
