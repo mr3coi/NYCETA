@@ -259,10 +259,10 @@ def filter_for_boros(command, start_super_boro, end_super_boro):
                    'locations l1, locations l2 '
                    'WHERE l1.LocationID = r.PULocationID '
                    'AND l2.LocationID = r.DOLocationID '
-                   f'AND (l1.Borough in ({start_boro_string}) '
+                   f'AND ((l1.Borough in ({start_boro_string}) '
                    f'AND l2.Borough in ({end_boro_string})) '
                    f'OR (l2.Borough in ({start_boro_string}) '
-                   f'AND l1.Borough in ({end_boro_string}))'
+                   f'AND l1.Borough in ({end_boro_string})))'
                    )
 
     return command
