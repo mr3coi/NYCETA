@@ -278,8 +278,8 @@ def get_cutoff_value(n, datacsv="./data_analysis/multiplier_tbl.csv"):
     :return: the cutoff value
     """
     data_table = np.loadtxt(datacsv, delimiter=',', skiprows=1, usecols=(0,1))
-    print(data_table)
     cv = -1
+
     for entry in data_table:
         if entry[0] == n:
             cv = entry[1]
@@ -302,8 +302,6 @@ def get_significant_data(features, values, cutoff):
     del_indices = []
     typeflag = False
 
-    print(features.shape, values, cutoff)
-    
     if not isinstance(features, np.ndarray):
         features = features.toarray()
         typeflag = True
@@ -318,7 +316,6 @@ def get_significant_data(features, values, cutoff):
     if typeflag:
         features = sparse.csr_matrix(features)
 
-    print(features.shape, values)
     return features, values
 
 
@@ -450,8 +447,6 @@ def extract_random_data_features(conn, table_name, random_size,
 
     cursor = conn.cursor()
 
-    print(random_size)
-
     # extracting coordinates of all 
     coords = extract_all_coordinates(conn, coords_table_name)
 
@@ -476,8 +471,6 @@ def extract_random_data_features(conn, table_name, random_size,
         print(e)
 
     rows = np.array(cursor.fetchall())
-    print(len(rows))
-    print("ggggggggggg")
 
     print("Making feature vectors from the extracted data")
     features, outputs = get_naive_features(rows, coords, boros, datetime_onehot=datetime_onehot, 
