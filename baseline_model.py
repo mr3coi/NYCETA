@@ -473,6 +473,9 @@ def main():
     parsed_args = parser.parse_args()
     conn = create_connection(parsed_args.db_path)
 
+    # Set `--use-saved` automatically if `--save-path` has been given
+    parsed_args.use_saved = (parsed_args.save_path is not None)
+
     if not parsed_args.use_saved:
         data_params = {
             "table_name":"rides",
