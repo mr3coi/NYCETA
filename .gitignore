@@ -114,3 +114,4 @@ rides.db
 *_curves.png
 logs/
 *.npy
+data/
