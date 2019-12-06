@@ -10,7 +10,7 @@ import xgboost as xgb
 from time import time
 import os
 
-from baseline_utils import create_dir, write_log, create_plot, save_dmatrix
+from baseline_utils import *
 from obtain_features import *
 
 
@@ -70,9 +70,8 @@ parser.add_argument("--xgb-num-thread", type=int, default=4,
 parser.add_argument("--use-saved", action="store_true",
                     help="Use the preprocessed & saved DMatrix data. "
                          "Need to first run with '--model save'. "
-                         "Also, recommend passing the same options "
-                         "as was used provided in '--model save' call "
-                         "for logging purposes")
+                         "This will be set AUTOMATICALLY as `True` "
+                         "once `--save-path` argument is provided")
 parser.add_argument("--save-path", type=str, default=None,
                     help="The path to saved DMatrices. Make sure "
                          "to EXCLUDE the extensions")
@@ -495,6 +494,10 @@ def main():
 
         features, outputs = \
             extract_features(conn, **data_params)
+    else:
+        # Parse dataset configurations from stored name
+        parsed_args = parse_dmat_name(parsed_args)
+
     dart_params = {
          "rate_drop":parsed_args.rate_drop,
          "sample_type":parsed_args.sample_type,

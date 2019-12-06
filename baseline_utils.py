@@ -144,12 +144,9 @@ def save_dmatrix(features, outputs, args, seed=None):
                  else f"{args.start_sb}"
     save_name += f"_sm{args.stddev_mul}"
     save_name += f"_test{args.test_size}"
-    if args.datetime_one_hot:
-        save_name += "_doh"
-    if args.weekdays_one_hot:
-        save_name += "_woh"
-    if args.loc_id:
-        save_name += "_locid"
+    save_name += f"_doh{args.datetime_one_hot}"
+    save_name += f"_woh{args.weekdays_one_hot}"
+    save_name += f"_locid{args.loc_id}"
     save_name += f"_s{seed}" if seed is not None else "_random"
 
     data_dirpath = create_dir("data")
@@ -177,3 +174,18 @@ def save_dmatrix(features, outputs, args, seed=None):
         dval.save_binary(val_path)
     if args.verbose:
         print(">>> DMatrices saved to disk")
+
+def parse_dmat_name(args):
+    dmat_name = args.save_path.split("/")[-1]
+    items = dmat_name.split("_")[1:]
+
+    # NOTE) prefixes = ["sb","sm","test","doh","woh","locid","seed"]
+    args.start_sb = int(items[0][2])
+    args.end_sb = int(items[0][2+1])
+    args.stddev_mul = float(items[1][2:])
+    args.test_size = float(items[2][4:])
+    args.datetime_one_hot = bool(int(items[3][3]))
+    args.weekdays_one_hot = bool(int(items[4][3]))
+    args.loc_id = bool(int(items[5][5]))
+
+    return args
