@@ -40,12 +40,6 @@ def write_log(args, stats, dirname="logs"):
         log.write(f"model: {args.model}, num_trees: {args.num_trees}, "
                   f"max_depth: {args.max_depth}, "
                   f"booster: {args.booster}\n")
-        '''XXX: Deprecated
-        if args.batch_size > 0:
-            log.write(f"batch_size: {args.batch_size}, "
-                      f"block_size: {args.block_size}, "
-                      f"num_batch: {'full' if args.num_batch is None else args.num_batch}\n")
-        '''
         log.write(f"subsample_rate: {args.subsample_rate}, "
                   f"learning_rate: {args.learning_rate}\n")
         log.write(f"datetime_one_hot: {args.datetime_one_hot}, "
