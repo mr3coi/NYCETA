@@ -145,9 +145,9 @@ def save_dmatrix(features, outputs, args, seed=None):
                  else f"{args.start_sb}"
     save_name += f"_sm{args.stddev_mul}"
     save_name += f"_test{args.test_size}"
-    save_name += f"_doh{args.datetime_one_hot}"
-    save_name += f"_woh{args.weekdays_one_hot}"
-    save_name += f"_locid{args.loc_id}"
+    save_name += f"_doh{int(args.datetime_one_hot)}"
+    save_name += f"_woh{int(args.weekdays_one_hot)}"
+    save_name += f"_locid{int(args.loc_id)}"
     save_name += f"_s{seed}" if seed is not None else "_random"
 
     data_dirpath = create_dir("data")
