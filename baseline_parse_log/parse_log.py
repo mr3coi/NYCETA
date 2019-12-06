@@ -78,7 +78,7 @@ def parse_stats_in_dir(dir_path):
             fp = open(fpath,'r')
             lines = read_file_by_line_and_close(fp)
             stats.append(
-                [parse_config(lines[:4]), parse_losses(lines[5:-1])]
+                [parse_config(lines[:4]), parse_losses(lines[5:-1]), fname]
                 )
             
     return stats
@@ -88,14 +88,16 @@ def return_smallest(stats):
     min_cfg = None
     min_idx = -1
     min_iter = -1
-    for idx, (cfg, losses) in enumerate(stats):
+    min_name = None
+    for idx, (cfg, losses, fname) in enumerate(stats):
         min_it = np.argmin(losses[:,-1])
         if losses[min_it,-1] < min_val_loss:
             min_val_loss = losses[min_it,-1]
             min_cfg = cfg
             min_idx = idx
             min_iter = min_it
-    return min_val_loss, min_idx, min_iter, min_cfg
+            min_name = fname
+    return min_val_loss, min_idx, min_iter, min_cfg, min_name
 
 def main():
     args = parser.parse_args()
@@ -105,9 +107,10 @@ def main():
         print(parse_config(lines[:4]))
         print(parse_losses(lines[5:-1]))
     if args.directory is not None:
-        stats = parse_stats_in_dir(args.directory):
-        min_val_loss, min_idx, min_iter, min_cfg = return_smallest(stats)
-        print(f"File #{min_idx}: {min_val_loss}")
+        stats = parse_stats_in_dir(args.directory)
+        min_val_loss, min_idx, min_iter, min_cfg, min_name \
+        	= return_smallest(stats)
+        print(f"[{min_name}]: {min_val_loss} at {min_iter+1}")
 
 if __name__ == "__main__":
     main()
