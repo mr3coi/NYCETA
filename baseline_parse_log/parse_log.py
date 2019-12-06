@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
+import os
 
 parser = argparse.ArgumentParser(
     description="Parses each log file in specified directory "
@@ -29,7 +30,9 @@ def num_or_str(string):
 
 def parse_config(cfg_strings):
     cfg_dict = {}
-    configs = ", ".join(cfg_strings).split(", ")
+    cfg_str = ", ".join(cfg_strings)
+    cfg_dict['str'] = cfg_str
+    configs = cfg_str.split(", ")
     for cfg in configs:
         cfg_name, cfg_val = cfg.split(": ")
         if cfg_val == "True":
@@ -45,12 +48,18 @@ def parse_losses(loss_strings):
     loss_tuples = []
     for loss_str in loss_strings:
         tokens = loss_str.split()
-        print(tokens)
-        iter_idx = int(tokens[2][:-1])
-        val_loss = float(tokens[5][:-1])
-        train_loss = float(tokens[8])
-        loss_tuples.append((iter_idx,val_loss,train_loss))
-    return loss_tuples
+        if len(tokens) == 9:
+            iter_idx = int(tokens[2][:-1])
+            val_loss = float(tokens[5][:-1])
+            train_loss = float(tokens[8])
+        elif len(tokens) == 8:
+            iter_idx = int(tokens[1][1:-1])
+            val_loss = float(tokens[4][:-1])
+            train_loss = float(tokens[7])
+        else:
+            raise ValueError
+        loss_tuples.append((iter_idx,train_loss,val_loss))
+    return np.asarray(loss_tuples)
 
 def read_file_by_line_and_close(fp):
     lines = []
@@ -61,14 +70,28 @@ def read_file_by_line_and_close(fp):
     fp.close()
     return lines
 
+def parse_stats_in_dir(dir_path):
+    stats = []
+    for fname in os.listdir(dir_path):
+        fpath = os.path.join(dir_path,fname)
+        if os.path.isfile(fpath):
+            fp = open(fpath,'r')
+            lines = read_file_by_line_and_close(fp)
+            stats.append(
+                [parse_config(lines[:4]), parse_losses(lines[5:-1])]
+                )
+            
+    return stats
+
 def main():
     args = parser.parse_args()
     if args.file is not None:
         fp = open(args.file,'r')
         lines = read_file_by_line_and_close(fp)
         print(parse_config(lines[:4]))
-        print(f"line 5: {lines[4]}")
         print(parse_losses(lines[5:-1]))
+    if args.directory is not None:
+        stats = parse_stats_in_dir(args.directory):
 
 if __name__ == "__main__":
     main()
