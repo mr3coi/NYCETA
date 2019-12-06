@@ -76,6 +76,13 @@ parser.add_argument("--save-path", type=str, default=None,
                     help="The path to saved DMatrices. Make sure "
                          "to EXCLUDE the extensions")
 
+# Loading & Prediction
+# TODO: Create an argument for directory to save models
+parser.add_argument("--pred-model", default=None,
+                    help="The name of the trained model to predict "
+                         "with. The model should be placed in "
+                         "`trained_models` directory.")
+
 # Dataset
 parser.add_argument("-sm", "--stddev-mul", type=float,
                     default=1, choices=[-1,0.25,0.5,1,2],
@@ -470,8 +477,24 @@ def xgb_gridsearch(features, outputs,
     return search.cv_results_
 
 
+def load_and_predict(model_path, dmat_path, loss_fn="MSE"):
+    loss = {"MSE": lambda y,fx: np.sqrt(mean_squared_error(y,fx))}[loss_fn]
+
+    model = xgb.Booster(model_file=model_path)
+    val_data = xgb.DMatrix(dmat_path + ".val")
+    predictions = model.predict(val_data)
+    targets = val_data.get_label()
+    return loss(targets,predictions)
+
 def main():
     parsed_args = parser.parse_args()
+
+    if parsed_args.pred_model is not None:
+        model_path = parsed_args.pred_model
+        loss = load_and_predict(model_path, parsed_args.save_path)
+        print(f">>> Loss of prediction : {loss}")
+        return
+
     conn = create_connection(parsed_args.db_path)
 
     # Set `--use-saved` automatically if `--save-path` has been given
