@@ -72,6 +72,7 @@ def write_log(args, stats, dirname="logs"):
             except IndexError:
                 break
         log.write(f"Final validation loss: {stats['val_loss']:.4f}")
+    return curr_time
 
 
 def create_plot(stats, model_name, save=True):
@@ -189,3 +190,14 @@ def parse_dmat_name(args):
     args.loc_id = bool(int(items[5][5]))
 
     return args
+
+def xgb_save_model(model, train_time_str, args):
+    model_dir = create_dir("trained_models")
+    model_name = f"sb{args.start_sb}{args.end_sb}_sm{args.stddev_mul}" \
+                 f"_{int(args.datetime_one_hot)}" \
+                 f"{int(args.weekdays_one_hot)}" \
+                 f"{int(args.loc_id)}"
+    model_name += f"_{train_time_str}.xgb"
+    model_path = os.path.join(model_dir,model_name)
+    model.save_model(model_path)
+    return model_path

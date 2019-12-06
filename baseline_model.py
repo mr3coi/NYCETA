@@ -116,6 +116,8 @@ parser.add_argument("-v", "--verbose", action="store_true",
 parser.add_argument("--log", action="store_true",
                     help="Record training log into a text file "
                          "(default location: 'NYCETA/logs')")
+parser.add_argument("-sv", "--save-model", action="store_true",
+                    help="Save the trained model")
 
 
 def gbrt(features, outputs,
@@ -295,7 +297,7 @@ def xgboost(features=None, outputs=None,
         "val_losses":   val_losses,
         "train_losses": train_losses,
     }
-    return result
+    return result, model
 
 
 def xgb_cv(features=None, outputs=None,
@@ -529,10 +531,10 @@ def main():
             print(">>> Data parsing complete, "
                   f"duration: {data_parsed_time - start_time} seconds")
         xgb_params["n_jobs"] = parsed_args.xgb_num_thread
-        result = xgboost(features if not parsed_args.use_saved else None,
-                         outputs  if not parsed_args.use_saved else None,
-                         **xgb_params,
-                        )
+        result, model = xgboost(features if not parsed_args.use_saved else None,
+                                outputs  if not parsed_args.use_saved else None,
+                                **xgb_params,
+                               )
 
     elif parsed_args.model == "xgb_gs":
         if parsed_args.verbose:
@@ -578,12 +580,19 @@ def main():
         return
 
     if parsed_args.log:
-        write_log(args=parsed_args, stats=result)
+        log_time = write_log(args=parsed_args, stats=result)
 
     if "val_loss" in result.keys():
         print(f"Validation set MSE = {result['val_loss']}")
     if "val_losses" in result.keys():
         create_plot(result, parsed_args.model)
+
+    if parsed_args.save_model:
+        assert parsed_args.model == "xgboost", \
+            "ERROR: only 'xgboost' model can save its model"
+        model_path = xgb_save_model(model, log_time, parsed_args)
+        if parsed_args.verbose:
+            print(f">>> Model saved as: {model_path}")
         
     conn.close()
 
