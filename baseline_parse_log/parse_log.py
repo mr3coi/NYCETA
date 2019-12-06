@@ -83,6 +83,20 @@ def parse_stats_in_dir(dir_path):
             
     return stats
 
+def return_smallest(stats):
+    min_val_loss = 1000000
+    min_cfg = None
+    min_idx = -1
+    min_iter = -1
+    for idx, (cfg, losses) in enumerate(stats):
+        min_it = np.argmin(losses[:,-1])
+        if losses[min_it,-1] < min_val_loss:
+            min_val_loss = losses[min_it,-1]
+            min_cfg = cfg
+            min_idx = idx
+            min_iter = min_it
+    return min_val_loss, min_idx, min_iter, min_cfg
+
 def main():
     args = parser.parse_args()
     if args.file is not None:
@@ -92,6 +106,8 @@ def main():
         print(parse_losses(lines[5:-1]))
     if args.directory is not None:
         stats = parse_stats_in_dir(args.directory):
+        min_val_loss, min_idx, min_iter, min_cfg = return_smallest(stats)
+        print(f"File #{min_idx}: {min_val_loss}")
 
 if __name__ == "__main__":
     main()
