@@ -394,7 +394,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                                                 datetime_onehot=datetime_onehot, 
                                                 weekdays_onehot=weekdays_onehot, 
                                                 include_loc_ids=include_loc_ids)
-            features_sample, outputs_sample = get_significant_data(features_sample, outputs_sample, cutoff_value)
+            features_sample, outputs_sample = get_significant_data(features_sample, outputs_sample, cutoff_val)
             if isinstance(features, np.ndarray) \
                 and isinstance(features_sample, np.ndarray):
                 features = np.vstack([features, features_sample])
