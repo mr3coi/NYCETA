@@ -58,16 +58,19 @@ def write_log(args, stats, dirname="logs"):
         log.write("\n\n")
 
         for tree_idx in range(args.num_trees):
-            log.write(f"[Iter #{tree_idx+1:4d}] ")
-            if "val_losses" in stats.keys():
-                log.write(f"val_loss = {stats['val_losses'][tree_idx]:.4f}")
-            if "train_losses" in stats.keys():
-                log.write(f", train_loss = {stats['train_losses'][tree_idx]:.4f}")
-            if "val_objective" in stats.keys():
-                log.write(f", val_obj = {stats['val_objective'][tree_idx]:.4f}")
-            if "train_objective" in stats.keys():
-                log.write(f", train_obj = {stats['train_objective'][tree_idx]:.4f}")
-            log.write("\n")
+            try:
+                log.write(f"[Iter #{tree_idx+1:4d}] ")
+                if "val_losses" in stats.keys():
+                    log.write(f"val_loss = {stats['val_losses'][tree_idx]:.4f}")
+                if "train_losses" in stats.keys():
+                    log.write(f", train_loss = {stats['train_losses'][tree_idx]:.4f}")
+                if "val_objective" in stats.keys():
+                    log.write(f", val_obj = {stats['val_objective'][tree_idx]:.4f}")
+                if "train_objective" in stats.keys():
+                    log.write(f", train_obj = {stats['train_objective'][tree_idx]:.4f}")
+                log.write("\n")
+            except IndexError:
+                break
         log.write(f"Final validation loss: {stats['val_loss']:.4f}")
 
 
