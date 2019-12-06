@@ -15,6 +15,7 @@ from obtain_features import *
 
 
 SUPERBORO_CODE = {
+    0: None,
     1: ["Bronx", "EWR", "Manhattan"],
     2: ["Brooklyn", "Queens"],
     3: ["Staten Island"],
@@ -77,6 +78,11 @@ parser.add_argument("--save-path", type=str, default=None,
                          "to EXCLUDE the extensions")
 
 # Dataset
+parser.add_argument("-sm", "--stddev-mul", type=float,
+                    default=1, choices=[-1,0.25,0.5,1,2],
+                    help="Number of stddev to add to the cutoff "
+                         "for outlier removal. -1 gives the whole dataset "
+                         "(choices: -1,0.25,0.5,1,2; default=1)")
 parser.add_argument("--db-path", type=str, default="./rides.db",
                     help="Path to the sqlite3 database file.")
 parser.add_argument("-r", "--rand-subset", type=int, default=0,
@@ -93,10 +99,16 @@ parser.add_argument("--no-loc-id", dest='loc_id', action="store_false",
                     help="Let the zone IDs be excluded from the dataset")
 parser.add_argument("--test-size", type=float, default=0.1,
                     help="Proportion of validation set (default: 0.1)")
-parser.add_argument("-sb", "--superboro", type=int, default=0, choices=[1,2,3],
-                    help="Use subset of data only for a single super-borough "
-                         "specified by code, use all data if unspecified "
+parser.add_argument("--start-sb", type=int, default=0, choices=[1,2,3],
+                    help="Use subset of data starting at the super-borough "
+                         "specified by code; use all data if unspecified "
                          "(1: Bronx, EWR, Manhattan | "
+                         "2: Brooklyn, Queens | 3: Staten Island)")
+parser.add_argument("--end-sb", type=int, default=0, choices=[1,2,3],
+                    help="Use subset of data ending at the  super-borough "
+                         "specified by code; use the same value as `--start-sb` "
+                         "if not provided and `--start-sb` has been provided, "
+                         "else use all data (1: Bronx, EWR, Manhattan | "
                          "2: Brooklyn, Queens | 3: Staten Island)")
 
 # Logging / Output
@@ -462,19 +474,24 @@ def main():
     conn = create_connection(parsed_args.db_path)
 
     if not parsed_args.use_saved:
+        data_params = {
+            "table_name":"rides",
+            "variant":"random" if parsed_args.rand_subset > 0 else "all",
+            "size":parsed_args.rand_subset,
+            "datetime_onehot":parsed_args.datetime_one_hot,
+            "weekdays_onehot":parsed_args.weekdays_one_hot,
+            "include_loc_ids":parsed_args.loc_id,
+            "start_super_boro":SUPERBORO_CODE[parsed_args.start_sb],
+            "end_super_boro":SUPERBORO_CODE[parsed_args.end_sb] \
+                    if parsed_args.end_sb > 0 \
+                    else SUPERBORO_CODE[parsed_args.start_sb],
+            "stddev_multiplier":parsed_args.stddev_mul,
+        }
         if parsed_args.verbose:
             start_time = time()
+
         features, outputs = \
-            extract_features(conn,
-                             table_name="rides",
-                             variant="random" if parsed_args.rand_subset > 0 else "all",
-                             size=parsed_args.rand_subset,
-                             datetime_onehot=parsed_args.datetime_one_hot,
-                             weekdays_onehot=parsed_args.weekdays_one_hot,
-                             include_loc_ids=parsed_args.loc_id,
-                             super_boro=SUPERBORO_CODE[parsed_args.superboro] \
-                                        if parsed_args.superboro > 0 else None,
-                            )
+            extract_features(conn, **data_params)
     dart_params = {
          "rate_drop":parsed_args.rate_drop,
          "sample_type":parsed_args.sample_type,

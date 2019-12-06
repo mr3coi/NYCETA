@@ -51,8 +51,10 @@ def write_log(args, stats, dirname="logs"):
         log.write(f"datetime_one_hot: {args.datetime_one_hot}, "
                   f"weekdays_one_hot: {args.weekdays_one_hot}, "
                   f"loc_id: {args.loc_id}, "
+                  f"stddev_mul: {args.stddev_mul}, "
                   f"test_size: {args.test_size}\n")
-        log.write(f"superboro: {args.superboro}")
+        log.write(f"start_sb: {args.start_sb}, ")
+        log.write(f"end_sb: {args.end_sb}")
         log.write("\n\n")
 
         for tree_idx in range(args.num_trees):
@@ -134,7 +136,10 @@ def save_dmatrix(features, outputs, args, seed=None):
     """
     # Record configurations in dataset name
     save_name = "dm"
-    save_name += f"_sb{args.superboro}"
+    save_name += f"_sb{args.start_sb}"
+    save_name += f"{args.end_sb}" if args.end_sb > 0 \
+                 else f"{args.start_sb}"
+    save_name += f"_sm{args.stddev_mul}"
     save_name += f"_test{args.test_size}"
     if args.datetime_one_hot:
         save_name += "_doh"
