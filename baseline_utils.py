@@ -7,6 +7,13 @@ from datetime import datetime as dt
 from pytz import timezone
 import os
 
+SUPERBORO_CODE = {
+    0: None,
+    1: ["Bronx", "EWR", "Manhattan"],
+    2: ["Brooklyn", "Queens"],
+    3: ["Staten Island"],
+}
+
 def create_dir(dirname):
     """Creates a directory in project root directory
     to store training logs, unless already exists.

@@ -14,14 +14,6 @@ from baseline_utils import *
 from obtain_features import *
 
 
-SUPERBORO_CODE = {
-    0: None,
-    1: ["Bronx", "EWR", "Manhattan"],
-    2: ["Brooklyn", "Queens"],
-    3: ["Staten Island"],
-}
-
-
 parser = argparse.ArgumentParser(
             description="Configure baseline model and how to train it"
          )
