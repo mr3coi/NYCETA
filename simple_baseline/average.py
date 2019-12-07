@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import sparse
+from scipy.stats import linregress
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
@@ -15,6 +16,10 @@ from baseline_utils import parse_dmat_name, SUPERBORO_CODE
 parser = argparse.ArgumentParser(
             description="Uses mean travel time as estimate"
          )
+
+# Method
+parser.add_argument("-m", "--method", type=str, choices=["mean","linreg"],
+                    help="Method for simple baseline ('mean','linreg')")
 
 # Dataset
 parser.add_argument("--db-path", type=str, default="./rides.db",
@@ -47,7 +52,8 @@ parser.add_argument("--end-sb", type=int, default=0, choices=[1,2,3],
 # Speeding up
 parser.add_argument("--save-path", type=str, default=None,
                     help="Path to saved DMatrix datasets. "
-                         "Used to exploit the fast loading speed")
+                         "Used to exploit the fast loading speed. "
+                         "Only supported when `--method mean`")
 parser.add_argument("--use-saved", action="store_true",
                     help="If True, uses saved DMatrix datasets "
                          "the path to which is provided by `--save-path`. "
@@ -61,15 +67,20 @@ parser.add_argument("-v", "--verbose", action="store_true",
                     help="Let the program be verbose")
 
 
-def evaluate(train_targets, test_targets, loss_fn="MSE"):
+def eval_mean(train_targets, test_targets, loss_fn="MSE"):
     loss = {"MSE": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true,y_pred)),}[loss_fn]
     prediction = np.mean(train_targets)
     return prediction, loss(test_targets, np.ones_like(test_targets) * prediction)
 
 
+def eval_linreg(f_train, o_train, f_test, o_test, loss_fn="MSE"):
+    loss = {"MSE": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true,y_pred)),}[loss_fn]
+    return 0
+
+
 def main():
     args = parser.parse_args()
-    args.use_saved = (args.save_path is not None)
+    args.use_saved = (args.method == "mean" and args.save_path is not None)
 
     if args.use_saved:
         test_outputs = xgb.DMatrix(args.save_path + ".val").get_label()
@@ -90,13 +101,26 @@ def main():
         }
 
         conn = create_connection(args.db_path)
-        _, outputs = extract_features(conn, **data_params)
-        train_outputs, test_outputs = \
-            train_test_split(outputs, test_size=args.test_size,
-                             shuffle=True, random_state=args.seed)
+        if args.method == "mean":
+            _, outputs = extract_features(conn, **data_params)
+            train_outputs, test_outputs = \
+                train_test_split(outputs,
+                                 test_size=args.test_size,
+                                 shuffle=True, random_state=args.seed)
+        elif args.method == "linreg":
+            features, outputs = extract_features(conn, **data_params)
+            train_features, train_outputs, test_features, test_outputs = \
+                train_test_split(features, outputs,
+                                 test_size=args.test_size,
+                                 shuffle=True, random_state=args.seed)
 
-    pred, loss = evaluate(train_outputs, test_outputs)
-    print(f">>> Prediction: {pred:.4f}, loss: {loss:.4f}")
+    if args.method == "mean":
+        pred, loss = eval_mean(train_outputs, test_outputs)
+        print(f">>> Prediction: {pred:.4f}, loss: {loss:.4f}")
+    elif args.method == "linreg":
+        loss = eval_linreg(train_features, train_outputs,
+                           test_features, test_outputs)
+        print(f">>> Prediction: loss: {loss:.4f}")
 
 
 if __name__ == "__main__":
