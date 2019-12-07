@@ -45,7 +45,7 @@ def write_log(args, stats, dirname="logs"):
         log.write(f"datetime_one_hot: {args.datetime_one_hot}, "
                   f"weekdays_one_hot: {args.weekdays_one_hot}, "
                   f"loc_id: {args.loc_id}, "
-                  f"stddev_mul: {args.stddev_mul}, "
+                  f"stddev_mul: {args.stddev_mul:.1}, "
                   f"test_size: {args.test_size}\n")
         log.write(f"start_sb: {args.start_sb}, ")
         log.write(f"end_sb: {args.end_sb}")
@@ -137,7 +137,7 @@ def save_dmatrix(features, outputs, args, seed=None):
     save_name += f"_sb{args.start_sb}"
     save_name += f"{args.end_sb}" if args.end_sb > 0 \
                  else f"{args.start_sb}"
-    save_name += f"_sm{args.stddev_mul}"
+    save_name += f"_sm{args.stddev_mul:.1}"
     save_name += f"_test{args.test_size}"
     save_name += f"_doh{int(args.datetime_one_hot)}"
     save_name += f"_woh{int(args.weekdays_one_hot)}"
@@ -187,7 +187,7 @@ def parse_dmat_name(args):
 
 def xgb_save_model(model, train_time_str, args):
     model_dir = create_dir("trained_models")
-    model_name = f"sb{args.start_sb}{args.end_sb}_sm{args.stddev_mul}" \
+    model_name = f"sb{args.start_sb}{args.end_sb}_sm{args.stddev_mul:.1}" \
                  f"_{int(args.datetime_one_hot)}" \
                  f"{int(args.weekdays_one_hot)}" \
                  f"{int(args.loc_id)}"
