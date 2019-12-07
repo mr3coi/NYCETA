@@ -481,6 +481,18 @@ def xgb_gridsearch(features, outputs,
 
 
 def xgb_load_and_predict(model_path, dmat_path, loss_fn="MSE"):
+    """Loads a stored model and evaluates it against a
+    validation dataset stored in the form of a DMatrix.
+    Mainly intended to evaluate large models (baseline or
+    ensemble models) within a subset of superboroughs
+
+    :model_path: Path to the saved model
+    :dmat_path: Path to the stored validation dmatrix to
+                evaluate against (EXCLUDING the suffix)
+    :loss_fn: Type of loss function to evaluate predictions with.
+              Currently supported: ["MSE"]
+    :returns: Loss value frome evaluation
+    """
     loss = {"MSE": lambda y,fx: np.sqrt(mean_squared_error(y,fx))}[loss_fn]
 
     model = xgb.Booster(model_file=model_path)

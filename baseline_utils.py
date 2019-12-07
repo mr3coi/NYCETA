@@ -171,6 +171,16 @@ def save_dmatrix(features, outputs, args, seed=None):
         print(">>> DMatrices saved to disk")
 
 def parse_dmat_name(args):
+    """Parses information from the name of the stored
+    DMatrix dataset, and updates `args` to contain
+    the parsed information
+
+    :args: Argparse ArgumentParser object containing
+           parsed details. Dataset name string is one
+           of the items within `args`
+    :returns: `args` with dataset-related items updated
+              according to info from dataset name
+    """
     dmat_name = args.save_path.split("/")[-1]
     items = dmat_name.split("_")[1:]
 
@@ -186,6 +196,16 @@ def parse_dmat_name(args):
     return args
 
 def xgb_save_model(model, train_time_str, args):
+    """Save trained XGBoost model into directory
+    specified by `--models-dir` argument
+
+    :model: The trained XGBoost model
+    :train_time_str: String containing time of training
+        the model (to allow for matching with training
+        log)
+    :args: Argparse ArgumentParser object
+    :returns: Path to the saved model (for printing)
+    """
     models_dir = create_dir(args.models_dir)
     model_name = f"sb{args.start_sb}{args.end_sb}_sm{args.stddev_mul:.1}" \
                  f"_{int(args.datetime_one_hot)}" \
