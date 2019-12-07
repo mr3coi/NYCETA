@@ -91,7 +91,7 @@ parser.add_argument("-sm", "--stddev-mul", type=float,
                     help="Number of stddev to add to the cutoff "
                          "for outlier removal. -1 gives the whole dataset "
                          "(choices: -1,0.25,0.5,1,2, default=1, "
-                         "assumed to have at most one digit below zero)")
+                         "assumed to have at most one decimal place)")
 parser.add_argument("--db-path", type=str, default="./rides.db",
                     help="Path to the sqlite3 database file.")
 parser.add_argument("-r", "--rand-subset", type=int, default=0,

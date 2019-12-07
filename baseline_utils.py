@@ -200,11 +200,11 @@ def xgb_save_model(model, train_time_str, args):
     specified by `--models-dir` argument
 
     :model: The trained XGBoost model
-    :train_time_str: String containing time of training
-        the model (to allow for matching with training
-        log)
+    :train_time_str: String containing time that the log
+        for training the model has been created
+        (to allow for matching with training log)
     :args: Argparse ArgumentParser object
-    :returns: Path to the saved model (for printing)
+    :returns: Path to the saved model
     """
     models_dir = create_dir(args.models_dir)
     model_name = f"sb{args.start_sb}{args.end_sb}_sm{args.stddev_mul:.1}" \
