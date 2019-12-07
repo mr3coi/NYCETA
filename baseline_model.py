@@ -77,11 +77,13 @@ parser.add_argument("--save-path", type=str, default=None,
                          "to EXCLUDE the extensions")
 
 # Loading & Prediction
-# TODO: Create an argument for directory to save models
-parser.add_argument("--pred-model", default=None,
+parser.add_argument("--models-dir", default="models", type=str,
+                    help="The directory containing the trained model "
+                         "to predict with (Default: 'models')")
+parser.add_argument("--pred-model", default=None, type=str,
                     help="The name of the trained model to predict "
                          "with. The model should be placed in "
-                         "`trained_models` directory.")
+                         "the directory specified by `--models-dir`")
 
 # Dataset
 parser.add_argument("-sm", "--stddev-mul", type=float,
@@ -478,7 +480,7 @@ def xgb_gridsearch(features, outputs,
     return search.cv_results_
 
 
-def load_and_predict(model_path, dmat_path, loss_fn="MSE"):
+def xgb_load_and_predict(model_path, dmat_path, loss_fn="MSE"):
     loss = {"MSE": lambda y,fx: np.sqrt(mean_squared_error(y,fx))}[loss_fn]
 
     model = xgb.Booster(model_file=model_path)
@@ -487,12 +489,14 @@ def load_and_predict(model_path, dmat_path, loss_fn="MSE"):
     targets = val_data.get_label()
     return loss(targets,predictions)
 
+
 def main():
     parsed_args = parser.parse_args()
 
     if parsed_args.pred_model is not None:
-        model_path = parsed_args.pred_model
-        loss = load_and_predict(model_path, parsed_args.save_path)
+        model_path = os.path.join(parsed_args.models_dir,
+                                  parsed_args.pred_model)
+        loss = xgb_load_and_predict(model_path, parsed_args.save_path)
         print(f">>> Loss of prediction : {loss}")
         return
 
@@ -613,7 +617,7 @@ def main():
 
     if parsed_args.save_model:
         assert parsed_args.model == "xgboost", \
-            "ERROR: only 'xgboost' model can save its model"
+            "ERROR: only 'xgboost' model can be saved"
         model_path = xgb_save_model(model, log_time, parsed_args)
         if parsed_args.verbose:
             print(f">>> Model saved as: {model_path}")

@@ -186,12 +186,12 @@ def parse_dmat_name(args):
     return args
 
 def xgb_save_model(model, train_time_str, args):
-    model_dir = create_dir("trained_models")
+    models_dir = create_dir(args.models_dir)
     model_name = f"sb{args.start_sb}{args.end_sb}_sm{args.stddev_mul:.1}" \
                  f"_{int(args.datetime_one_hot)}" \
                  f"{int(args.weekdays_one_hot)}" \
                  f"{int(args.loc_id)}"
     model_name += f"_{train_time_str}.xgb"
-    model_path = os.path.join(model_dir,model_name)
+    model_path = os.path.join(models_dir,model_name)
     model.save_model(model_path)
     return model_path
