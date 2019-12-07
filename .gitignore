@@ -115,3 +115,6 @@ rides.db
 logs/
 *.npy
 data/
+*.train
+*.val
+models/
