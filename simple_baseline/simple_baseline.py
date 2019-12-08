@@ -23,7 +23,8 @@ parser.add_argument("-m", "--method", type=str, choices=["mean","linreg"],
 
 # Dataset
 parser.add_argument("--db-path", type=str, default="./rides.db",
-                    help="Path to the sqlite3 database file.")
+                    help="Path to the sqlite3 database file "
+                         "(Default: './rides.db')")
 parser.add_argument("-sm", "--stddev-mul", type=float,
                     default=1, choices=[-1,0.25,0.5,1,2], help="Number of stddev to add to the cutoff "
                          "for outlier removal. -1 gives the whole dataset "
@@ -62,15 +63,20 @@ parser.add_argument("--use-saved", action="store_true",
 
 # Miscellaneous
 parser.add_argument("--seed", type=int, default=10701,
-                    help="Seed for the whole program")
-parser.add_argument("-v", "--verbose", action="store_true",
-                    help="Let the program be verbose")
+                    help="Seed for the whole program (default: 10701)")
 
 
-def eval_mean(train_targets, test_targets, loss_fn="MSE"):
+def eval_mean(o_train, o_test, loss_fn="MSE"):
+    """Baseline 1: Sample mean of training labels
+
+    :o_train: Training data
+    :o_test: Test data
+    :loss_fn: Evaluation metric
+    :returns: Loss against test data
+    """
     loss = {"MSE": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true,y_pred)),}[loss_fn]
-    prediction = np.mean(train_targets)
-    return prediction, loss(test_targets, np.ones_like(test_targets) * prediction)
+    prediction = np.mean(o_train)
+    return prediction, loss(o_test, np.ones_like(o_test) * prediction)
 
 
 def eval_linreg(f_train, o_train, f_test, o_test, loss_fn="MSE",n_jobs=4):
@@ -94,7 +100,6 @@ def eval_linreg(f_train, o_train, f_test, o_test, loss_fn="MSE",n_jobs=4):
         'test_loss': loss_val,
         'r2_score': model.score(f_train,o_train),
     }
-    print(outputs)  # TODO: Delete
     return outputs
 
 
