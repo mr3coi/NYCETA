@@ -109,7 +109,12 @@ def evaluate(models, features, outputs, doh, woh, loc_id):
     trips.
 
     :models: List of models for prediction (starting at index 1)
-    :features, outputs: 
+    :features, outputs: Cross-superboro dataset to evaluate upon
+    :doh: Boolean for datetime-one-hotness
+    :woh: Boolean for weekdays-one-hotness
+    :loc_id: Boolean for including PU, DO locationIDs
+        (locationIDs are one-hot if included)
+    :returns: Total loss from the given dataset
     """
     total_loss = 0
     convert = lambda trip: crossboro_preproc(trip, doh, woh, loc_id)
