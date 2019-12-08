@@ -109,8 +109,9 @@ def main():
     if args.directory is not None:
         stats = parse_stats_in_dir(args.directory)
         min_val_loss, min_idx, min_iter, min_cfg, min_name \
-        	= return_smallest(stats)
+            = return_smallest(stats)
         print(f"[{min_name}]: {min_val_loss} at {min_iter+1}")
+        print(min_cfg)
 
 if __name__ == "__main__":
     main()
