@@ -43,18 +43,8 @@ parser.add_argument("-woh", "--weekdays-one-hot", action="store_true",
                     help="Let the week-of-the-day feature be loaded as one-hot")
 parser.add_argument("--no-loc-id", dest='loc_id', action="store_false",
                     help="Let the zone IDs be excluded from the dataset")
-parser.add_argument("--start-sb", type=int, default=0, choices=[1,2,3],
-                    help="Use subset of data starting at the super-borough "
-                         "specified by code; use all data if unspecified "
-                         "(1: Bronx, EWR, Manhattan | "
-                         "2: Brooklyn, Queens | 3: Staten Island)")
-parser.add_argument("--end-sb", type=int, default=0, choices=[1,2,3],
-                    help="Use subset of data ending at the  super-borough "
-                         "specified by code; use the same value as `--start-sb` "
-                         "if not provided and `--start-sb` has been provided, "
-                         "else use all data (1: Bronx, EWR, Manhattan | "
-                         "2: Brooklyn, Queens | 3: Staten Island)")
 
+# Preprocessing
 parser.add_argument("--use-saved", action="store_true",
                     help="Use the preprocessed & saved features & outputs. "
                          "Need to first run with '--save'. "
@@ -64,6 +54,8 @@ parser.add_argument("--use-saved", action="store_true",
 parser.add_argument("--save", action="store_true",
                     help="Save the np/sparse array containing cross-superboro "
                          "trips to disk")
+
+# Misc
 parser.add_argument("-v", "--verbose", action="store_true",
                     help="Let the model print training progress (if supported)")
 
@@ -147,7 +139,7 @@ def evaluate(models, features, outputs, doh, woh, loc_id):
     return np.sqrt(total_loss)
 
 
-def load_cross_superboro(args):
+def load_cross_superboro(args, f_path=None, o_path=None):
     """Load cross-superboro datapoints from DB into memory,
     with features as `scipy.sparse.csr_matrix` or `np.array`
     and outputs as `np.array`.
@@ -158,6 +150,8 @@ def load_cross_superboro(args):
     option has been specified.
 
     :args: argparse Namespace
+    :f_path, o_path: Paths to store feaetures and outputs at
+        (needed when `--save` option is on)
     :returns: features and outputs arrays containing all
         cross-superboro trips
     """
@@ -212,17 +206,8 @@ def load_cross_superboro(args):
               f"total duration: {time() - start_time:.2f} seconds")
 
     if args.save:
-        f_path = "./data/crossboro_" \
-                 f"{int(args.datetime_one_hot)}" \
-                 f"{int(args.weekdays_one_hot)}" \
-                 f"{int(args.loc_id)}" \
-                 "_features"
-        o_path = "./data/crossboro_" \
-                 f"{int(args.datetime_one_hot)}" \
-                 f"{int(args.weekdays_one_hot)}" \
-                 f"{int(args.loc_id)}" \
-                 "_outputs.npy"
-
+        assert f_path is not None and o_path is not None, \
+            "ERROR: Please provide `f_path` and `o_path` arguments"
         if is_sparse:
             sparse.save_npz(f_path, features)
         else:
@@ -240,18 +225,18 @@ def main():
     is_sparse = args.datetime_one_hot \
                 or args.weekdays_one_hot \
                 or args.loc_id
+    f_path = "./data/crossboro_" \
+             f"{int(args.datetime_one_hot)}" \
+             f"{int(args.weekdays_one_hot)}" \
+             f"{int(args.loc_id)}" \
+             "_features"
+    o_path = "./data/crossboro_" \
+             f"{int(args.datetime_one_hot)}" \
+             f"{int(args.weekdays_one_hot)}" \
+             f"{int(args.loc_id)}" \
+             "_outputs.npy"
 
     if args.use_saved:  # Load arrays stored in disk
-        f_path = "./data/crossboro_" \
-                 f"{int(args.datetime_one_hot)}" \
-                 f"{int(args.weekdays_one_hot)}" \
-                 f"{int(args.loc_id)}" \
-                 "_features"
-        o_path = "./data/crossboro_" \
-                 f"{int(args.datetime_one_hot)}" \
-                 f"{int(args.weekdays_one_hot)}" \
-                 f"{int(args.loc_id)}" \
-                 "_outputs.npy"
         if args.verbose:
             start_time = time()
 
@@ -265,7 +250,7 @@ def main():
                   f"total duration: {time() - start_time:.2f} seconds")
             
     else:   # Parse arrays from DB
-        features, outputs = load_cross_superboro(args)
+        features, outputs = load_cross_superboro(args, f_path, o_path)
 
     if args.verbose:
         print(f">>> features.shape = {features.shape}")
