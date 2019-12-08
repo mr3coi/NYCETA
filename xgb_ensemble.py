@@ -75,7 +75,7 @@ def crossboro_preproc(features, doh, woh, loc_id):
         - PU Super-boro code (int between 1 and 3)
         - DO Super-boro code (int between 1 and 3)
         - Features for PU->bridge (np.array)
-        - Features for bridge->DO
+        - Features for bridge->DO (np.array)
 
     :features: A single row in `features` array obtained
         from `extract_features` function call
@@ -105,7 +105,7 @@ def load_models(args):
     :returns: List containing a `None` at index 0,
         followed by three XGBoost models
     """
-    raise NotImplementedError("ERROR: Load models for inference")
+    raise NotImplementedError("ERROR: Choose models to load for inference")
     sb1_model = xgb.load_model(args.sb1_model_path)
     sb2_model = xgb.load_model(args.sb2_model_path)
     sb3_model = xgb.load_model(args.sb3_model_path)
@@ -209,7 +209,7 @@ def load_cross_superboro(args):
     if args.verbose:
         print(">>> All pairs complete, "
               f"# of rows: {outputs.shape[0]}, "
-              f"total duration: {time() - start_time} seconds")
+              f"total duration: {time() - start_time:.2f} seconds")
 
     if args.save:
         f_path = "./data/crossboro_" \
@@ -241,7 +241,7 @@ def main():
                 or args.weekdays_one_hot \
                 or args.loc_id
 
-    if args.use_saved:
+    if args.use_saved:  # Load arrays stored in disk
         f_path = "./data/crossboro_" \
                  f"{int(args.datetime_one_hot)}" \
                  f"{int(args.weekdays_one_hot)}" \
@@ -255,7 +255,6 @@ def main():
         if args.verbose:
             start_time = time()
 
-        # Do loading
         features = sparse.load_npz(f_path + ".npz") if is_sparse \
                     else np.load(f_path + ".npy")
         outputs = np.load(o_path)
@@ -263,17 +262,17 @@ def main():
         if args.verbose:
             print(">>> Loading from disk complete, "
                   f"# of rows: {outputs.shape[0]}, "
-                  f"total duration: {time() - start_time} seconds")
+                  f"total duration: {time() - start_time:.2f} seconds")
             
         args = parse_dmat_name(args)
-    else:
+    else:   # Parse arrays from DB
         features, outputs = load_cross_superboro(args)
 
     if args.verbose:
         print(f">>> features.shape = {features.shape}")
         print(f">>> outputs.shape = {outputs.shape}")
 
-    return
+    return # TODO: Delete once the below code is ready to run
 
     models = load_models(args)
     loss = evaluate(models, features, outputs,
