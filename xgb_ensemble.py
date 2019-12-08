@@ -6,7 +6,7 @@ import os
 import argparse
 from time import time
 
-from baseline_utils import parse_dmat_name, SUPERBORO_CODE
+from baseline_utils import SUPERBORO_CODE
 from obtain_features import *
 
 
@@ -264,7 +264,6 @@ def main():
                   f"# of rows: {outputs.shape[0]}, "
                   f"total duration: {time() - start_time:.2f} seconds")
             
-        args = parse_dmat_name(args)
     else:   # Parse arrays from DB
         features, outputs = load_cross_superboro(args)
 
