@@ -149,7 +149,7 @@ def gbrt(features, outputs,
         "verbose": verbose,
         }
 
-    f_train, o_train, f_val, o_val = \
+    f_train, f_val, o_train, o_val = \
         train_test_split(features, outputs,
                          test_size=0.1,
                          shuffle=True,
