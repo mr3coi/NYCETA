@@ -60,6 +60,7 @@ parser.add_argument("--batch-size", type=int, default=1000,
 parser.add_argument("--model-path", type=str, default=None,
                     help="Path to the model to hot start from")
 
+
 TOTAL_ENTRIES_IN_DB = 67302302
 
 
@@ -224,7 +225,6 @@ def main():
 
 	sql_batch_size = 1e6
 	sql_block_size = 1e5
-
 
 	data_generator = extract_features
 	data_generator_arguments = {

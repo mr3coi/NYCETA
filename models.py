@@ -17,6 +17,7 @@ def create_boro_model(num_neurons_in_layers, input_dim):
     return model
 
 
+
 class BoroModel(object):
 
     def __init__(self, sess, inp_dim, num_neurons_in_layers=[100,50], learning_rate=1e-3):
@@ -117,5 +118,3 @@ class SelectorModel(object):
             self.gradient_wrt_output: grads_wrt_outputs 
         })
 
-
-        

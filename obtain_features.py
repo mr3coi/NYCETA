@@ -606,6 +606,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
         yield features, outputs
 
 
+
 def extract_features(conn, table_name, variant='all', size=None, block_size=None, 
     datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None, 
     end_super_boro=None, stddev_multiplier=1, cutoff_data_csv='./data_analysis/multiplier_tbl.csv'):
