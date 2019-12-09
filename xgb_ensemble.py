@@ -290,6 +290,10 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
                                 f"{int(args.loc_id)}"
                                 ".txt")
         print(f">>> To be logged in: {log_path}")
+        try:
+            os.remove(log_path)
+        except OSError:
+            pass
         with open(log_path, "a+") as log_file:
             log_file.write(f"sb1: {args.sb1_model_path} \n")
             log_file.write(f"sb2: {args.sb2_model_path} \n")
@@ -399,6 +403,10 @@ def load_cross_superboro(args, f_path=None, o_path=None):
               f"total duration: {time() - start_time:.2f} seconds")
 
     if args.save:
+        assert os.path.split(f_path)[0] == os.path.split(o_path)[0], \
+            "ERROR: 'features' and 'outputs' should be saved " \
+            "in the same location"
+        create_dir(os.path.split(f_path)[0])
         assert f_path is not None and o_path is not None, \
             "ERROR: Please provide `f_path` and `o_path` arguments"
         if is_sparse:
