@@ -62,7 +62,7 @@ parser.add_argument("-v", "--verbose", action="store_true",
                     help="Let the model print training progress (if supported)")
 
 
-def connecting_bridges(start_superboro_id, end_super_boro_id, conn):
+def connecting_bridges(start_superboro_id, end_superboro_id, conn):
     """Returns all bridges connecting two superboroughs
 
     :start_superboro_id: the first superborough we wish our
@@ -77,7 +77,7 @@ def connecting_bridges(start_superboro_id, end_super_boro_id, conn):
     cursor = conn.cursor()
 
     start_superboro_string = list_to_quoted_string(SUPERBORO_CODE[start_superboro_id])
-    end_superboro_string = list_to_quoted_string(SUPERBORO_CODE[start_superboro_id])
+    end_superboro_string = list_to_quoted_string(SUPERBORO_CODE[end_superboro_id])
 
     query = f"""
     SELECT b.LocationID1, b.LocationID2
@@ -110,15 +110,15 @@ def get_location_ids_in_boro(boro, conn):
     except Error as e:
         print(e)
     rows = cursor.fetchall()
-    return set(rows)
+    return set([row[0] for row in rows])
 
 
 def crossboro_preproc_setup(conn):
     loaded_bridge_data = {}
     superboro_location_ids = {}
+    boro_location_ids = {}
     inverted_boro_dict = {v: k for k, v in BOROUGHS.items()}
     coordinates = extract_all_coordinates(conn, 'coordinates')
-    coordinates = {k: v for k, v in coordinates}
     conn = conn
 
     def crossboro_preproc(features, doh, woh, loc_id):
@@ -144,13 +144,13 @@ def crossboro_preproc_setup(conn):
         nonlocal loaded_bridge_data
         nonlocal inverted_boro_dict
         nonlocal superboro_location_ids
+        nonlocal boro_location_ids
         nonlocal coordinates
         nonlocal conn
 
         # NOTE: if `features` is a row from `scipy.sparse` matrix,
         #       it may have to be converted into `np.array` (dense)
         is_sparse = doh or woh or loc_id
-        print(features)
         indices = features.nonzero()[1]
 
         start_boro_one_hot = indices[-4] - 9
@@ -174,37 +174,58 @@ def crossboro_preproc_setup(conn):
             loaded_bridge_data[superboro_pair_code] = connecting_bridges(start_code, end_code, conn)
 
         if start_code not in superboro_location_ids:
-            location_ids = []
+            location_ids = set()
             for boro in SUPERBORO_CODE[start_code]:
-                location_ids.append(get_location_ids_in_boro(boro, conn))
+                if boro not in boro_location_ids:
+                    boro_locations = get_location_ids_in_boro(boro, conn)
+                    boro_location_ids[boro] = boro_locations
+                location_ids.update(boro_location_ids[boro])
             superboro_location_ids[start_code] = location_ids
+
+        if end_code not in superboro_location_ids:
+            location_ids = set()
+            for boro in SUPERBORO_CODE[end_code]:
+                if boro not in boro_location_ids:
+                    boro_locations = get_location_ids_in_boro(boro, conn)
+                    boro_location_ids[boro] = boro_locations
+                location_ids.update(boro_location_ids[boro])
+            superboro_location_ids[end_code] = location_ids
 
         rides = []
         for bridge in loaded_bridge_data[superboro_pair_code]:
-            first_boro, second_boro = bridge
-            start_boro = None
-            end_boro = None
+            first_zone, second_zone = bridge
+            start_zone = None
+            end_zone = None
 
-            if first_boro in superboro_location_ids[start_code]:
-                start_boro = first_boro
-                end_boro = second_boro
+            if first_zone in superboro_location_ids[start_code]:
+                start_zone = first_zone
+                end_zone = second_zone
             else:
-                start_boro = second_boro
-                end_boro = first_boro
+                start_zone = second_zone
+                end_zone = first_zone
 
-            first_leg = np.copy(features)
-            print(indices[-3])
-            print(first_leg[indices[-3]])
-            first_leg[indices[-3]] = 0
-            first_leg[start_boro + 16] = 1
-            first_leg[8] = coordinates[start_boro][0]
-            first_leg[9] = coordinates[start_boro][1]
+            bridge_start_boro = None
+            bridge_end_boro = None
+            for k, v in boro_location_ids.items():
+                if start_zone in v:
+                    bridge_start_boro = k
+                if end_zone in v:
+                    bridge_end_boro = k
 
-            second_leg = np.copy(features)
-            second_leg[indices[-4]] = 0
-            second_leg[start_boro + 10] = 1
-            second_leg[6] = coordinates[start_boro][0]
-            second_leg[7] = coordinates[start_boro][1]
+            bridge_start_boro_id = BOROUGHS[bridge_start_boro]
+            bridge_end_boro_id = BOROUGHS[bridge_end_boro]
+
+            first_leg = features.copy()
+            first_leg[0, indices[-3]] = 0
+            first_leg[0, bridge_start_boro_id + 15] = 1
+            first_leg[0, 8] = coordinates[start_zone][0]
+            first_leg[0, 9] = coordinates[start_zone][1]
+
+            second_leg = features.copy()
+            second_leg[0, indices[-4]] = 0
+            second_leg[0, bridge_end_boro_id + 9] = 1
+            second_leg[0, 6] = coordinates[end_zone][0]
+            second_leg[0, 7] = coordinates[end_zone][1]
 
             rides.append((start_code, end_code, first_leg, second_leg))
 
@@ -249,7 +270,7 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
 
     # Iterate through each cross-superboro trip
     for inputs, output in zip(features, outputs):
-        inputs = [convert(trip) for trip in inputs]
+        inputs = convert(inputs)
 
         min_loss = 1e20
 
@@ -350,7 +371,6 @@ def load_cross_superboro(args, f_path=None, o_path=None):
         if args.verbose:
             print(">>> Features and outputs saved to disk")
 
-    print('this function returns')
     return features, outputs
 
 
