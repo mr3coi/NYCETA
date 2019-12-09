@@ -2,6 +2,7 @@ import os
 import datetime
 import argparse
 import numpy as np
+from tqdm import tqdm
 from scipy import sparse
 from models import BoroModel, create_boro_model
 from utils import create_connection
@@ -9,7 +10,7 @@ from obtain_features import extract_features
 
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint
 
 
 SUPER_BOROS = [
@@ -18,20 +19,30 @@ SUPER_BOROS = [
 	["Staten Island"]
 ]
 
+
+# feature vector Types
+# 1. no one hot, no loc id 
+# 2. both one hot, no loc id 
+# 3. both one hot, with loc id
 FEATURE_TYPES = {
 	1:	{
+			"sparse": False,
 			"datetime_onehot": False,
 			"weekdays_onehot": False,
 			"include_loc_ids": False,
-			"size": 22
+			"size": 22,
+			"split_indices": [8, 16]
 		},
 	2:	{
+			"sparse": True,
 			"datetime_onehot": True,
 			"weekdays_onehot": True,
 			"include_loc_ids": False,
-			"size": 210
+			"size": 210,
+			"split_indices": [8, 16]
 		},
 	3:	{
+			"sparse": True,
 			"datetime_onehot": True,
 			"weekdays_onehot": True,
 			"include_loc_ids": True,
@@ -66,21 +77,25 @@ TOTAL_ENTRIES_IN_DB = 67302302
 
 def nn_batch_generator(X_data, y_data, batch_size):
     samples_per_epoch = X_data.shape[0]
-    number_of_batches = samples_per_epoch/batch_size
+    number_of_batches = int(samples_per_epoch/batch_size)
     counter=0
     index = np.arange(np.shape(y_data)[0])
+    p_bar = tqdm(total = number_of_batches+1)
     while 1:
         index_batch = index[batch_size*counter:batch_size*(counter+1)]
         X_batch = X_data[index_batch,:].todense()
         y_batch = y_data[index_batch]
         counter += 1
         yield np.array(X_batch),y_batch
+        p_bar.update(1)
         if (counter > number_of_batches):
             counter=0
+            p_bar.close()
+            p_bar = tqdm(total = number_of_batches+1)
 
 
 def train_on_batches(model, data_generator, data_gen_args, saved, features_file, values_file,
-				model_dir, isSparse=True, num_epochs=20):
+				model_dir, isSparse=True, num_epochs=20, batch_size=1000, start_epoch=0):
 
 	if not saved:
 		features, values = data_generator(**data_gen_args)
@@ -91,7 +106,7 @@ def train_on_batches(model, data_generator, data_gen_args, saved, features_file,
 		np.save(values_file, values)
 	else:
 		if isSparse:
-			print(f"Loading sparse features from {features_file}")
+			print(f"Loading sparse features from {features_file}.npz")
 			features = sparse.load_npz(features_file+".npz")
 		else:
 			print(f"Loading dense features from {features_file}")
@@ -100,13 +115,14 @@ def train_on_batches(model, data_generator, data_gen_args, saved, features_file,
 		print(f"Loading output values from {values_file}")
 		values = np.load(values_file, allow_pickle=True)
 
-	total_samples = features.shape[0]
 
 	train_features, test_features, train_values, test_values = train_test_split(
 			features, values, test_size=0.1, random_state=42)
 
-	save_every = 5
-	batch_size = 1000
+	# train_features, val_features, train_values, val_values = train_test_split(
+			# train_features_, train_values_, test_size=0.05, random_state=42)
+
+	total_samples = train_features.shape[0]
 	steps_per_epoch = int(total_samples/batch_size)+1
 	
 
@@ -114,47 +130,31 @@ def train_on_batches(model, data_generator, data_gen_args, saved, features_file,
 	model.compile(optimizer=optimizer, loss=tf.keras.losses.MeanSquaredError(),
 		 metrics=[tf.keras.metrics.RootMeanSquaredError()])
 
+	model_weights_dir = os.path.join(model_dir,'weights')
+	mc = ModelCheckpoint(os.path.join(model_weights_dir,'weights_{epoch:08d}.h5'), 
+                                    save_weights_only=True, save_freq='epoch')
 	csv_logger = CSVLogger(os.path.join(model_dir, 'log.csv'), append=True, separator=';')
+	os.mkdir(model_weights_dir)
+	print(f'Starting training on {total_samples} samples, with batches of {batch_size}, having {steps_per_epoch} batches per epoch')
 
 	model.fit_generator(nn_batch_generator(train_features, train_values, batch_size=int(batch_size)), 
-						epochs=num_epochs, verbose=2, steps_per_epoch=steps_per_epoch,
-						use_multiprocessing=True, workers=4, callbacks=[csv_logger])
+						epochs=num_epochs, verbose=2, steps_per_epoch=steps_per_epoch, callbacks=[csv_logger, mc],
+						initial_epoch=start_epoch)
 
-	test_scores = model.evaluate(test_features, test_values, verbose=0)
+	test_scores = model.evaluate(nn_batch_generator(test_features, test_values, batch_size=int(batch_size)), verbose=0)
 	print(f"Model evalutaion on test data\n {test_scores}")
+
+	with open(os.path.join(model_dir, 'eval.txt'), 'w') as f:
+		f.write(str(test_scores))
 
 	tf.keras.models.save_model(model, os.path.join(model_dir, f'model_{num_epochs}'))
 
-	# iter_num = 0
-	# log_file = open(os.path.join(model_dir, "training_logs.txt"), "w")
 
-	# for epoch in range(num_epochs):
-		
-	# 	print(f"\nEpoch {epoch+1} begins")
-	# 	epochLoss = 0.0
-	# 	for features, outputs in data_generator(**data_gen_args):
-	# 		iter_num += 1
-	# 		print(f'Training epoch: {epoch+1}, iteration: {iter_num}')
-	# 		if not isinstance(features,np.ndarray):
-	# 			features = features.toarray()
-	# 		if not isinstance(outputs, np.ndarray):
-	# 			outputs = outputs.toarray()
-	# 		MSEloss = model.train_on_batch(x=features, y=outputs)
-	# 		print(f'loss: {MSEloss}')
-	# 		epochLoss += MSEloss
-	# 		log_file.write(f'{epoch+1}, {iter_num}, {MSEloss}\n')
 
-	# 		if iter_num % save_every == 0:
-	# 			tf.keras.models.save_model(model, os.path.join(model_dir, f'model_{iter_num}'))
-
-	# 	print(f"Total Epoch Loss = {epochLoss}")
-	# 	print("======================================================================\n")
-
-	# log_file.close()
 
 
 def train(model, data_generator, data_gen_args, saved, features_file, values_file, 
-			model_dir, isSparse=False, num_epochs=20, batch_size=1000, start_epoch=1):
+			model_dir, isSparse=False, num_epochs=20, batch_size=1000, start_epoch=0):
 	
 	if not saved:
 		features, values = data_generator(**data_gen_args)
@@ -182,9 +182,12 @@ def train(model, data_generator, data_gen_args, saved, features_file, values_fil
 		 metrics=[tf.keras.metrics.RootMeanSquaredError()])
 
 	csv_logger = CSVLogger(os.path.join(model_dir, 'log.csv'), append=True, separator=';')
+	os.mkdir(model_weights_dir)
+	mc = ModelCheckpoint(os.path.join(model_weights_dir,'weights_{epoch:08d}.h5'), 
+                                     save_weights_only=True, period=2)
 
 	model.fit(train_features, train_values, epochs=num_epochs, batch_size=batch_size,
-				validation_split=0.1, verbose=1, callbacks=[csv_logger], initial_epoch=start_epoch)
+				validation_split=0.1, verbose=1, callbacks=[csv_logger, mc], initial_epoch=start_epoch)
 
 	test_scores = model.evaluate(test_features, test_values, verbose=0, callbacks=[csv_logger])
 	print(f"Model evalutaion on test data\n {test_scores}")
@@ -248,7 +251,7 @@ def main():
 				values_file, model_dir, is_sparse, num_epochs, batch_size, start_epoch)
 	elif variant == 'batch':
 		train_on_batches(model, data_generator, data_generator_arguments, saved,
-				features_file, values_file, model_dir, is_sparse, num_epochs, start_epoch)
+				features_file, values_file, model_dir, is_sparse, num_epochs, batch_size, start_epoch)
 
 
 
@@ -256,9 +259,3 @@ def main():
 if __name__ == "__main__":
 	main()
 
-
-# feature vector sizes
-# 
-# 1. no one hot, no loc id = 22
-# 2. both one hot, no loc id = 210
-# 3. both one hot, with loc id

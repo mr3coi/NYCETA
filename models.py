@@ -24,6 +24,7 @@ class BoroModel(object):
         
         self.sess = sess
         set_session(self.sess)
+
         self.model = create_boro_model(num_neurons_in_layers, inp_dim)
 
         self.optimizer = tf.keras.optimizers.Adam(learning_rate = learning_rate)
@@ -78,8 +79,8 @@ def create_selector_model(num_neurons_in_layers, fsize, dtsize, bridge_matrix1, 
 
     br_matrix1 = K.variable(bridge_matrix, trainable=False)
     br_matrix2 = K.variable(bridge_matrix, trainable=False)
-    ob1 = K.dot(K.transpose(f), br_matrix1)
-    ob2 = K.dot(K.transpose(f), br_matrix2)
+    ob1 = K.dot(br_matrix1, f)
+    ob2 = K.dot(br_matrix2, f)
 
     o1 = tf.layers.concatenate([pu_input, ob1, dt_input])
     ob = tf.layers.concatenate([ob1, ob2, dt_input])
@@ -94,7 +95,7 @@ def create_selector_model(num_neurons_in_layers, fsize, dtsize, bridge_matrix1, 
 class SelectorModel(object):
 
     def __init__(self, sess, num_neurons_in_layers, fsize, dtsize, 
-        bridge_matrix1, bridge_matrix2, learning_rate):
+        bridge_matrix1, bridge_matrix2, learning_rate=1e-3):
         
         set_session(sess)
         self.model = create_selector_model(num_neurons_in_layers, fsize,
@@ -118,3 +119,8 @@ class SelectorModel(object):
             self.gradient_wrt_output: grads_wrt_outputs 
         })
 
+    def save_model(self, path):
+        tf.keras.models.save_model(self.model, path)
+
+    def load_model(self, path):
+        self.model = tf.keras.models.load_model(path, compile=True)
