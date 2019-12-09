@@ -9,9 +9,7 @@ selectors = [
 	SelectorModel()
 ]
 
-boro_models = [
-	
-]
+boro_models = [ ]
 
 br_model = 
 

@@ -405,7 +405,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                                                 datetime_onehot=datetime_onehot, 
                                                 weekdays_onehot=weekdays_onehot, 
                                                 include_loc_ids=include_loc_ids)
-            features_sample, outputs_sample = get_significant_data(features_sample, outputs_sample, cutoff_value)
+            features_sample, outputs_sample = get_significant_data(features_sample, outputs_sample, cutoff_val)
             if isinstance(features, np.ndarray) \
                 and isinstance(features_sample, np.ndarray):
                 features = np.vstack([features, features_sample])
@@ -469,12 +469,16 @@ def extract_random_data_features(conn, table_name, random_size,
         command = filter_for_boros(command, start_super_boro, end_super_boro)
 
     print('Reading data entries from the table in the database')
-    try:
-        cursor.execute(command)
-    except sqlite3.Error as e:
-        print(e)
+    
+    while True:
+        try:
+            cursor.execute(command)
+        except sqlite3.Error as e:
+            print(e)
 
-    rows = np.array(cursor.fetchall())
+        rows = np.array(cursor.fetchall())
+        if (rows.shape[0] > 0):
+            break
 
     print("Making feature vectors from the extracted data")
     features, outputs = get_naive_features(rows, coords, boros, datetime_onehot=datetime_onehot, 
@@ -676,10 +680,10 @@ if __name__ == "__main__":
     con = create_connection(db_name)   
     # We have a total of 67302302 entries in the rides table 
     features_, outputs_ = extract_features(con, "rides", variant='random', size=10,
-                                           start_super_boro=['Manhattan', 'Bronx', 'EWR'],
-                                           end_super_boro=['Brooklyn', 'Queens'],
-                                           datetime_onehot=False, weekdays_onehot=False,
-                                           include_loc_ids=False, stddev_multiplier=1)
+                                           start_super_boro=['Manhattan'],
+                                           end_super_boro=['Manhattan'],
+                                           datetime_onehot=True, weekdays_onehot=True,
+                                           include_loc_ids=True, stddev_multiplier=1)
     # for idx, (features_, outputs_) in enumerate(extract_features(con, "rides", variant='batch', size=100000, block_size=1000)):
         # print(f'Batch {idx}) features: {features_.shape}, outputs: {outputs_.shape}')
         # break
