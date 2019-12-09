@@ -60,7 +60,7 @@ parser.add_argument("--save", action="store_true",
                          "trips to disk")
 
 # Misc
-parser.add_argument("-v", "--verbose", action="store_true",
+parser.add_argument("-v", "--verbose", action='count', default=0,
                     help="Let the model print training progress (if supported)")
 parser.add_argument("--log-dir", type=str, default="logs/xgb_ensemble",
                     help="Directory to store test log in")
@@ -303,10 +303,11 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
     breakpoint = args.log if args.log > 0 else 10000
 
     # Iterate through each cross-superboro trip
-    for idx, (inputs, output) in enumerate(zip(features, outputs)):
-        inputs = convert(inputs)
+    for idx, (inputs_, output) in enumerate(zip(features, outputs)):
+        inputs = convert(inputs_)
 
         min_loss = 1e20
+        max_loss = -1
 
         # Compute loss for each bridge and record minimum
         for (sb_PU, sb_DO, f_PU, f_DO) in inputs:
@@ -321,11 +322,21 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
             pred = PU_duration + DO_duration
             loss = (pred - output)**2
             min_loss = min(min_loss, loss)
+            max_loss = max(max_loss, loss)
+
+        if args.verbose > 1:
+            print(f"[{idx+1:8}] "
+                  f"min: {np.sqrt(min_loss):25.3f}, "
+                  f"max: {np.sqrt(max_loss):30.3f}")
+
+            if min_loss == 1e20:
+                print(inputs_)
+                print(inputs)
 
         total_loss += min_loss
 
         if (idx+1) % breakpoint == 0:
-            if args.verbose:
+            if args.verbose > 0:
                 print(f">>> Running test point {idx+1}, "
                       f"current loss {np.sqrt(total_loss / (idx+1)):.4f}")
             if args.log > 0:
