@@ -152,9 +152,15 @@ def crossboro_preproc_setup(conn):
         is_sparse = doh or woh or loc_id
         indices = features.nonzero()[1]
 
-        start_boro_one_hot = indices[-4] - 9
+        boro_start_index = 9
+        if woh:
+            boro_start_index += 6
+        if doh:
+            boro_start_index += 182
+
+        start_boro_one_hot = indices[-4] - boro_start_index
         start_boro = inverted_boro_dict[start_boro_one_hot]
-        end_boro_one_hot = indices[-3] - 15
+        end_boro_one_hot = indices[-3] - (boro_start_index + 6)
         end_boro = inverted_boro_dict[end_boro_one_hot]
         start_code = 0
         end_code = 0
@@ -216,13 +222,13 @@ def crossboro_preproc_setup(conn):
 
             first_leg = features.copy()
             first_leg[0, indices[-3]] = 0
-            first_leg[0, bridge_start_boro_id + 15] = 1
+            first_leg[0, bridge_start_boro_id + boro_start_index] = 1
             first_leg[0, 8] = coordinates[start_zone][0]
             first_leg[0, 9] = coordinates[start_zone][1]
 
             second_leg = features.copy()
             second_leg[0, indices[-4]] = 0
-            second_leg[0, bridge_end_boro_id + 9] = 1
+            second_leg[0, bridge_end_boro_id + boro_start_index + 6] = 1
             second_leg[0, 6] = coordinates[end_zone][0]
             second_leg[0, 7] = coordinates[end_zone][1]
 
@@ -404,7 +410,7 @@ def main():
             print(">>> Loading from disk complete, "
                   f"# of rows: {outputs.shape[0]}, "
                   f"total duration: {time() - start_time:.2f} seconds")
-            
+
     else:   # Parse arrays from DB
         features, outputs = load_cross_superboro(args, f_path, o_path)
 
