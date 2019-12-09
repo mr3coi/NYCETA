@@ -235,7 +235,12 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
     trips.
 
     :models: List of models for prediction (starting at index 1)
-    :features, outputs: 
+    :features, outputs: Cross-superboro dataset to evaluate upon
+    :doh: Boolean for datetime-one-hotness
+    :woh: Boolean for weekdays-one-hotness
+    :loc_id: Boolean for including PU, DO locationIDs
+        (locationIDs are one-hot if included)
+    :returns: Total loss from the given dataset
     """
     conn = create_connection(args.db_path)
     total_loss = 0
