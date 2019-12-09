@@ -8,6 +8,8 @@ from time import time
 
 from baseline_utils import SUPERBORO_CODE
 from obtain_features import *
+from bridge_info import BRIDGES
+from borough_labels import BOROUGHS
 
 
 parser = argparse.ArgumentParser(
@@ -60,32 +62,156 @@ parser.add_argument("-v", "--verbose", action="store_true",
                     help="Let the model print training progress (if supported)")
 
 
-def crossboro_preproc(features, doh, woh, loc_id):
-    """Given the details of a single cross-superboro trip
-    as a 1-D array of features, for each bridge connecting
-    the two superboros involved, return the following info:
-        - PU Super-boro code (int between 1 and 3)
-        - DO Super-boro code (int between 1 and 3)
-        - Features for PU->bridge (np.array)
-        - Features for bridge->DO (np.array)
+def connecting_bridges(start_superboro_id, end_super_boro_id, conn):
+    """Returns all bridges connecting two superboroughs
 
-    :features: A single row in `features` array obtained
-        from `extract_features` function call
-        (corresponds to a single cross-superboro trip)
-    :doh: Boolean for datetime-one-hotness
-    :woh: Boolean for weekdays-one-hotness
-    :loc_id: Boolean for including PU, DO locationIDs
-        (locationIDs are one-hot if included)
-    :returns: A list with length equal to the number of
-        bridges between the two super-boros, where each
-        element is a sublist with the info listed above
+    :start_superboro_id: the first superborough we wish our
+        bridges to connect
+    :end_superboro_id: the other superborough we wish our
+        bridges to connect
+    :conn: a connection to the database containing information
+        on our bridges
+    :returns: a list of tuples, where the tuples contain two integers,
+        representing a start and an end location id
     """
-    # NOTE: if `features` is a row from `scipy.sparse` matrix,
-    #       it may have to be converted into `np.array` (dense)        
-    is_sparse = doh or woh or loc_id
+    cursor = conn.cursor()
 
-    raise NotImplementedError("ERROR: Cross-boro preprocessing "
-                               "has not yet been implemented")
+    start_superboro_string = list_to_quoted_string(SUPERBORO_CODE[start_superboro_id])
+    end_superboro_string = list_to_quoted_string(SUPERBORO_CODE[start_superboro_id])
+
+    query = f"""
+    SELECT b.LocationID1, b.LocationID2
+    FROM bridges b, locations l1, locations l2
+    WHERE b.LocationID1 = l1.LocationID
+    AND b.LocationID2 = l2.LocationID
+    AND ((l1.Borough IN ({start_superboro_string}) AND l2.Borough in ({end_superboro_string}))
+    OR (l2.Borough IN ({start_superboro_string}) AND l1.Borough in ({end_superboro_string})))
+    """
+
+    try:
+        cursor.execute(query)
+    except Error as e:
+        print(e)
+    rows = cursor.fetchall()
+    return rows
+
+
+def get_location_ids_in_boro(boro, conn):
+    cursor = conn.cursor()
+
+    query = f"""
+    SELECT LocationID
+    FROM locations
+    WHERE Borough = "{boro}"
+    """
+
+    try:
+        cursor.execute(query)
+    except Error as e:
+        print(e)
+    rows = cursor.fetchall()
+    return set(rows)
+
+
+def crossboro_preproc_setup(conn):
+    loaded_bridge_data = {}
+    superboro_location_ids = {}
+    inverted_boro_dict = {v: k for k, v in BOROUGHS.items()}
+    coordinates = extract_all_coordinates(conn, 'coordinates')
+    coordinates = {k: v for k, v in coordinates}
+    conn = conn
+
+    def crossboro_preproc(features, doh, woh, loc_id):
+        """Given the details of a single cross-superboro trip
+        as a 1-D array of features, for each bridge connecting
+        the two superboros involved, return the following info:
+            - PU Super-boro code (int between 1 and 3)
+            - DO Super-boro code (int between 1 and 3)
+            - Features for PU->bridge (np.array)
+            - Features for bridge->DO (np.array)
+
+        :features: A single row in `features` array obtained
+            from `extract_features` function call
+            (corresponds to a single cross-superboro trip)
+        :doh: Boolean for datetime-one-hotness
+        :woh: Boolean for weekdays-one-hotness
+        :loc_id: Boolean for including PU, DO locationIDs
+            (locationIDs are one-hot if included)
+        :returns: A list with length equal to the number of
+            bridges between the two super-boros, where each
+            element is a sublist with the info listed above
+        """
+        nonlocal loaded_bridge_data
+        nonlocal inverted_boro_dict
+        nonlocal superboro_location_ids
+        nonlocal coordinates
+        nonlocal conn
+
+        # NOTE: if `features` is a row from `scipy.sparse` matrix,
+        #       it may have to be converted into `np.array` (dense)
+        is_sparse = doh or woh or loc_id
+        print(features)
+        indices = features.nonzero()[1]
+
+        start_boro_one_hot = indices[-4] - 9
+        start_boro = inverted_boro_dict[start_boro_one_hot]
+        end_boro_one_hot = indices[-3] - 15
+        end_boro = inverted_boro_dict[end_boro_one_hot]
+        start_code = 0
+        end_code = 0
+
+        for k, v in SUPERBORO_CODE.items():
+            if v is None:
+                continue
+
+            if start_boro in v:
+                start_code = k
+            if end_boro in v:
+                end_code = k
+
+        superboro_pair_code = tuple(sorted((start_code, end_code)))
+        if superboro_pair_code not in loaded_bridge_data:
+            loaded_bridge_data[superboro_pair_code] = connecting_bridges(start_code, end_code, conn)
+
+        if start_code not in superboro_location_ids:
+            location_ids = []
+            for boro in SUPERBORO_CODE[start_code]:
+                location_ids.append(get_location_ids_in_boro(boro, conn))
+            superboro_location_ids[start_code] = location_ids
+
+        rides = []
+        for bridge in loaded_bridge_data[superboro_pair_code]:
+            first_boro, second_boro = bridge
+            start_boro = None
+            end_boro = None
+
+            if first_boro in superboro_location_ids[start_code]:
+                start_boro = first_boro
+                end_boro = second_boro
+            else:
+                start_boro = second_boro
+                end_boro = first_boro
+
+            first_leg = np.copy(features)
+            print(indices[-3])
+            print(first_leg[indices[-3]])
+            first_leg[indices[-3]] = 0
+            first_leg[start_boro + 16] = 1
+            first_leg[8] = coordinates[start_boro][0]
+            first_leg[9] = coordinates[start_boro][1]
+
+            second_leg = np.copy(features)
+            second_leg[indices[-4]] = 0
+            second_leg[start_boro + 10] = 1
+            second_leg[6] = coordinates[start_boro][0]
+            second_leg[7] = coordinates[start_boro][1]
+
+            rides.append((start_code, end_code, first_leg, second_leg))
+
+        return rides
+
+    return crossboro_preproc
+
 
 def load_models(args):
     """Returns a list containing XGBoost models to
@@ -104,14 +230,16 @@ def load_models(args):
     return [None,sb1_model,sb2_model,sb3_model]
 
 
-def evaluate(models, features, outputs, doh, woh, loc_id):
+def evaluate(models, features, outputs, doh, woh, loc_id, args):
     """Evaluate the selected superboro models on cross-superboro
     trips.
 
     :models: List of models for prediction (starting at index 1)
     :features, outputs: 
     """
+    conn = create_connection(args.db_path)
     total_loss = 0
+    crossboro_preproc = crossboro_preproc_setup(conn)
     convert = lambda trip: crossboro_preproc(trip, doh, woh, loc_id)
 
     # Iterate through each cross-superboro trip
@@ -217,6 +345,7 @@ def load_cross_superboro(args, f_path=None, o_path=None):
         if args.verbose:
             print(">>> Features and outputs saved to disk")
 
+    print('this function returns')
     return features, outputs
 
 
@@ -256,13 +385,12 @@ def main():
         print(f">>> features.shape = {features.shape}")
         print(f">>> outputs.shape = {outputs.shape}")
 
-    return # TODO: Delete once the below code is ready to run
-
-    models = load_models(args)
+    # models = load_models(args)
+    models = None
     loss = evaluate(models, features, outputs,
                     args.datetime_one_hot,
                     args.weekdays_one_hot,
-                    args.loc_id)
+                    args.loc_id, args)
     print(f">>> Loss for cross-superboro trips: {loss}")
 
 
