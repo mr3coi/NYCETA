@@ -18,12 +18,11 @@ parser = argparse.ArgumentParser(
     )
 
 # Super-boro models for inference
-# TODO: Fill in default values
-parser.add_argument("--sb1-model-path", type=str, default="",
+parser.add_argument("-sb1", "--sb1-model-path", type=str, default="models/sb11_sm1.0_001_2019-12-06-11-22-49.xgb",
                     help="Path to the stored model for Super-boro 1 (MEBx)")
-parser.add_argument("--sb2-model-path", type=str, default="",
+parser.add_argument("-sb2", "--sb2-model-path", type=str, default="models/sb22_sm1.0_001_2019-12-09-13-31-09.xgb",
                     help="Path to the stored model for Super-boro 2 (BkQ)")
-parser.add_argument("--sb3-model-path", type=str, default="",
+parser.add_argument("-sb3", "--sb3-model-path", type=str, default="models/sb33_sm1.0_001_2019-12-08-21-02-35.xgb",
                     help="Path to the stored model for Super-boro 3 (St)")
 
 # Dataset
@@ -244,10 +243,9 @@ def load_models(args):
     :returns: List containing a `None` at index 0,
         followed by three XGBoost models
     """
-    raise NotImplementedError("ERROR: Choose models to load for inference")
-    sb1_model = xgb.load_model(args.sb1_model_path)
-    sb2_model = xgb.load_model(args.sb2_model_path)
-    sb3_model = xgb.load_model(args.sb3_model_path)
+    sb1_model = xgb.Booster(model_file=args.sb1_model_path)
+    sb2_model = xgb.Booster(model_file=args.sb2_model_path)
+    sb3_model = xgb.Booster(model_file=args.sb3_model_path)
     return [None,sb1_model,sb2_model,sb3_model]
 
 
@@ -269,7 +267,7 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
     convert = lambda trip: crossboro_preproc(trip, doh, woh, loc_id)
 
     # Iterate through each cross-superboro trip
-    for inputs, output in zip(features, outputs):
+    for idx, (inputs, output) in enumerate(zip(features, outputs)):
         inputs = convert(inputs)
 
         min_loss = 1e20
@@ -280,17 +278,21 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
             f_DO_dmat = xgb.DMatrix(f_DO)
 
             # Compute durations for each trip
-            PU_duration = models[sb_PU].predict(f_PU_dmat)
-            DO_duration = models[sb_DO].predict(f_DO_dmat)
+            PU_duration = models[sb_PU].predict(f_PU_dmat)[0]
+            DO_duration = models[sb_DO].predict(f_DO_dmat)[0]
 
             # Compute total duration & MSE loss
             pred = PU_duration + DO_duration
-            loss = (pred - outputs)**2
+            loss = (pred - output)**2
             min_loss = min(min_loss, loss)
 
         total_loss += min_loss
 
-    return np.sqrt(total_loss)
+        if args.verbose and (idx+1) % 10000 == 0:
+            print(f">>> Running test point {idx+1}, "
+                  f"current loss {np.sqrt(total_loss / (idx+1)):.4f}")
+
+    return np.sqrt(total_loss / outputs.shape[0])
 
 
 def load_cross_superboro(args, f_path=None, o_path=None):
@@ -410,12 +412,18 @@ def main():
         print(f">>> features.shape = {features.shape}")
         print(f">>> outputs.shape = {outputs.shape}")
 
-    # models = load_models(args)
-    models = None
+    models = load_models(args)
+
+    if args.verbose:
+        start_time = time()
+
     loss = evaluate(models, features, outputs,
                     args.datetime_one_hot,
                     args.weekdays_one_hot,
                     args.loc_id, args)
+    if args.verbose:
+        print(f">>> Total evaluation runtime: {time() - start_time}")
+
     print(f">>> Loss for cross-superboro trips: {loss}")
 
 
