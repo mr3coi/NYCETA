@@ -1,6 +1,7 @@
 import xgboost as xgb
 import numpy as np
 from scipy import sparse
+from sklearn.utils import shuffle
 
 import os
 import argparse
@@ -44,6 +45,8 @@ parser.add_argument("-woh", "--weekdays-one-hot", action="store_true",
                     help="Let the week-of-the-day feature be loaded as one-hot")
 parser.add_argument("--no-loc-id", dest='loc_id', action="store_false",
                     help="Let the zone IDs be excluded from the dataset")
+parser.add_argument("--test-size", type=float, default=1.0,
+                    help="Proportion of test set (default: 1.0)")
 
 # Preprocessing
 parser.add_argument("--use-saved", action="store_true",
@@ -441,6 +444,11 @@ def main():
 
     else:   # Parse arrays from DB
         features, outputs = load_cross_superboro(args, f_path, o_path)
+
+    n_samples = int(features.shape[0] * args.test_size)
+    features, outputs = shuffle(features, outputs,
+                                random_state=10701,
+                                n_samples=n_samples)
 
     if args.verbose:
         print(f">>> features.shape = {features.shape}")
