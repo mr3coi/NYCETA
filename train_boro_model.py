@@ -141,7 +141,11 @@ def train_on_batches(model, data_generator, data_gen_args, saved, features_file,
 						epochs=num_epochs, verbose=2, steps_per_epoch=steps_per_epoch, callbacks=[csv_logger, mc],
 						initial_epoch=start_epoch)
 
-	test_scores = model.evaluate(nn_batch_generator(test_features, test_values, batch_size=int(batch_size)), verbose=0)
+	test_samples = test_features.shape[0]
+	evaluation_steps = int(test_samples/batch_size)+1
+	print(f"Evalutating model on {test_features.shape[0]} samples, with batches of {batch_size}, having {evaluation_steps} batches in total")
+	test_scores = model.evaluate(nn_batch_generator(test_features, test_values, batch_size=int(batch_size)),
+									steps=evaluation_steps, verbose=0)
 	print(f"Model evalutaion on test data\n {test_scores}")
 
 	with open(os.path.join(model_dir, 'eval.txt'), 'w') as f:

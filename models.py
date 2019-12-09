@@ -73,7 +73,7 @@ def create_selector_model(num_neurons_in_layers, fsize, dtsize, bridge_matrix1, 
     pu_input = tf.keras.layers.Input(shape=[fsize], name="pu_feature")
     do_input = tf.keras.layers.Input(shape=[fsize], name="do_feature")
     dt_input = tf.keras.layers.Input(shape=[dtsize], name="dt_feature")
-    f = tf.keras.layers.concatenate()([pu_input, do_input, dt_input])
+    f = tf.keras.layers.concatenate([pu_input, do_input, dt_input])
     f = tf.keras.layers.Dense(num_neurons_in_layers[0], activation='relu')(f)
     f = tf.keras.layers.Dense(num_neurons_in_layers[1], activation='softmax')(f)
 
