@@ -6,7 +6,7 @@ import os
 import argparse
 from time import time
 
-from baseline_utils import SUPERBORO_CODE
+from baseline_utils import SUPERBORO_CODE, create_dir
 from obtain_features import *
 from bridge_info import BRIDGES
 from borough_labels import BOROUGHS
@@ -59,6 +59,11 @@ parser.add_argument("--save", action="store_true",
 # Misc
 parser.add_argument("-v", "--verbose", action="store_true",
                     help="Let the model print training progress (if supported)")
+parser.add_argument("--log-dir", type=str, default="logs/xgb_ensemble",
+                    help="Directory to store test log in")
+parser.add_argument("--log", type=int, default=0,
+                    help="Log testing progress every {log} test points "
+                         "(default: 0 => do not log)")
 
 
 def connecting_bridges(start_superboro_id, end_superboro_id, conn):
@@ -272,6 +277,24 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
     crossboro_preproc = crossboro_preproc_setup(conn)
     convert = lambda trip: crossboro_preproc(trip, doh, woh, loc_id)
 
+    if args.log > 0:
+        log_dir = create_dir(args.log_dir)
+        log_path = os.path.join(log_dir,
+                                f"log_ts{args.test_size}"
+                                f"_sm{args.stddev_mul}"
+                                f"_{int(args.datetime_one_hot)}"
+                                f"{int(args.weekdays_one_hot)}"
+                                f"{int(args.loc_id)}"
+                                ".txt")
+        print(f">>> To be logged in: {log_path}")
+        with open(log_path, "a+") as log_file:
+            log_file.write(f"sb1: {args.sb1_model_path} \n")
+            log_file.write(f"sb2: {args.sb2_model_path} \n")
+            log_file.write(f"sb3: {args.sb3_model_path} \n")
+            log_file.write("\n")
+
+    breakpoint = args.log if args.log > 0 else 10000
+
     # Iterate through each cross-superboro trip
     for idx, (inputs, output) in enumerate(zip(features, outputs)):
         inputs = convert(inputs)
@@ -294,9 +317,14 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
 
         total_loss += min_loss
 
-        if args.verbose and (idx+1) % 10000 == 0:
-            print(f">>> Running test point {idx+1}, "
-                  f"current loss {np.sqrt(total_loss / (idx+1)):.4f}")
+        if (idx+1) % breakpoint == 0:
+            if args.verbose:
+                print(f">>> Running test point {idx+1}, "
+                      f"current loss {np.sqrt(total_loss / (idx+1)):.4f}")
+            if args.log > 0:
+                with open(log_path, "a+") as log_file:
+                    log_file.write(f"idx {idx+1}: "
+                        f"{np.sqrt(total_loss / (idx+1)):.4f}\n")
 
     return np.sqrt(total_loss / outputs.shape[0])
 
