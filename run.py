@@ -1,27 +1,14 @@
-import numpy as np
-from utils import create_connection
-from obtain_features import *
+import os
+import tensorflow as tf 
+from models import create_boro_model
 
-super_boroughs = {
-		# 'mbe': ['Manhattan', 'Bronx', 'EWR'],
-		'si': ['Staten Island'],
-		'bq': ['Brooklyn', 'Queens']
-	}
+modelpath = '/home/amritsin/Desktop/10-701/project/NYCETA/models/2019-12-09_21-51-29_Manhattan_f2'
 
-for sb in super_boroughs:
-	print(f"Extracting features for {super_boroughs[sb]}")
-	con = create_connection('/home/ubuntu/data/rides.db')
+weights_path = os.path.join(modelpath, 'weights')
+weights_path = os.path.join(weights_path, 'weights_00000005.h5')
 
-	features_, outputs_ = extract_features(con, "rides", variant='all', size=10, super_boro=super_boroughs[sb],
-                                                datetime_onehot=True, 
-                                                weekdays_onehot=True, 
-                                                include_loc_ids=True)
+model = create_boro_model([200, 50], 210)
 
-	# the format of each feature vector
-	#  [PUDatetime, PUCoords, DOCoords, PUBoroughs, DOBoroughs, PULocID, DOLocID]
-	
-	features_ = np.array(features_.toarray())	
-	outputs_ = np.array(outputs_)
+model.load_weights(weights_path)
 
-	np.save(features_, "features_"+sb+".npy")
-	np.save(outputs_, "outputs_"+sb+".npy")
+tf.keras.models.save_model(model, os.path.join(modelpath, 'model_5'))

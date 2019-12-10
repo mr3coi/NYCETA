@@ -186,6 +186,7 @@ def train(model, data_generator, data_gen_args, saved, features_file, values_fil
 		 metrics=[tf.keras.metrics.RootMeanSquaredError()])
 
 	csv_logger = CSVLogger(os.path.join(model_dir, 'log.csv'), append=True, separator=';')
+	model_weights_dir = os.path.join(model_dir,'weights')
 	os.mkdir(model_weights_dir)
 	mc = ModelCheckpoint(os.path.join(model_weights_dir,'weights_{epoch:08d}.h5'), 
                                      save_weights_only=True, period=2)

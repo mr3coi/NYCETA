@@ -371,6 +371,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
 
     print("Extracting data in batches of size {}".format(limit))
     stop_condition = False
+    set_flag = False
     while batch_num*limit < NUM_ROWS:
         print("Reading data for batch number {}".format(batch_num))
         command = ('SELECT tpep_pickup_datetime, tpep_dropoff_datetime, '
@@ -401,12 +402,13 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
             continue
 
         print("Extracting features from the read data")
-        if offset == 0:
+        if not set_flag:
             features, outputs = get_naive_features(rows, coords, boros, 
                                     datetime_onehot=datetime_onehot, 
                                     weekdays_onehot=weekdays_onehot, 
                                     include_loc_ids=include_loc_ids)
             features, outputs = get_significant_data(features, outputs, cutoff_val)
+            set_flag = True
         else:
             features_sample, outputs_sample = get_naive_features(rows, coords, boros, 
                                                 datetime_onehot=datetime_onehot, 
