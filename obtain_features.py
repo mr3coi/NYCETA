@@ -170,7 +170,7 @@ def extract_all_boroughs(conn, table_name, maxLocID=263):
 
 
 def get_naive_features(rows, coords, boros, maxLocID=263, datetime_onehot=True, 
-    weekdays_onehot=True, include_loc_ids=True):
+    weekdays_onehot=True, include_loc_ids=True, use_nn_ordering=False):
     """Obtain the naive features to which contain
     the all the information available to us
     in the concatanted vector
@@ -186,7 +186,9 @@ def get_naive_features(rows, coords, boros, maxLocID=263, datetime_onehot=True,
     :weekdays_onehot: boolean for whether we want a onehot represnetation for
         day of the week value, or a single index one
     :include_loc_ids: boolean for whether to include locIds as one-hot
-        in the feature vectors, or not 
+        in the feature vectors, or not
+    :use_nn_ordering: rearranges returned vectors to better be used by
+        our neural networks
     :returns: a sparse csr_matrix for the feature vectors(if we use any hot rep)
         or a numpy array for the features vectors, 
         and a np array for the time taken in seconds
@@ -210,12 +212,19 @@ def get_naive_features(rows, coords, boros, maxLocID=263, datetime_onehot=True,
     if include_loc_ids:
         PULocID = get_one_hot(PULocID, 1, maxLocID)
         DOLocID = get_one_hot(DOLocID, 1, maxLocID)
-        feature_vectors = sparse.hstack([PUDatetime, PUCoords, DOCoords, 
-            PUBoroughs, DOBoroughs, PULocID, DOLocID], format="csr")
+        feature_vectors = sparse.hstack([PULocID, PUCoords, PUBoroughs, 
+            DOLocID, DOCoords, DOBoroughs, PUDatetime], format="csr")
     elif datetime_onehot or weekdays_onehot:
-        feature_vectors = sparse.hstack([PUDatetime, PUCoords, DOCoords, PUBoroughs, DOBoroughs], format="csr")
+        if use_nn_ordering:
+            feature_vectors = sparse.hstack([PUCoords, PUBoroughs, DOCoords, DOBoroughs, PUDatetime], format="csr")
+        else:
+            feature_vectors = sparse.hstack([PUDatetime, PUCoords, DOCoords, PUBoroughs, DOBoroughs], format="csr")
+
     else:
-        feature_vectors = np.hstack([PUDatetime, PUCoords, DOCoords, PUBoroughs, DOBoroughs])
+        if use_nn_ordering:
+            feature_vectors = np.hstack([PUCoords, PUBoroughs, DOCoords, DOBoroughs, PUDatetime])
+        else:
+            feature_vectors = np.hstack([PUDatetime, PUCoords, DOCoords, PUBoroughs, DOBoroughs])
 
     delta = np.array([datetime.timedelta(
         days=d_datetime[0][i]-p_datetime[0][i],
@@ -239,7 +248,7 @@ def list_to_quoted_string(l):
     return ', '.join(with_quotes)
 
 
-def filter_for_boros(command, start_super_boro, end_super_boro):
+def filter_for_boros(command, start_super_boro, end_super_boro, two_way=True):
     """Modifies an input command to only return commands either
     starting in start_super_boro and ending in end_super_boro,
     or the reverse
@@ -247,6 +256,8 @@ def filter_for_boros(command, start_super_boro, end_super_boro):
     :command: the input command
     :start_super_boro: one of the super boros
     :end_super_boro: the other super boro
+    :two_way: if False, only return rides starting in start_super_boro
+        and ending in end_super_boro
     :returns: the modified command
     """
     start_boro_string = list_to_quoted_string(start_super_boro)
@@ -258,12 +269,16 @@ def filter_for_boros(command, start_super_boro, end_super_boro):
                    ') r, '
                    'locations l1, locations l2 '
                    'WHERE l1.LocationID = r.PULocationID '
-                   'AND l2.LocationID = r.DOLocationID '
-                   f'AND ((l1.Borough in ({start_boro_string}) '
-                   f'AND l2.Borough in ({end_boro_string})) '
-                   f'OR (l2.Borough in ({start_boro_string}) '
-                   f'AND l1.Borough in ({end_boro_string})))'
+                   'AND l2.LocationID = r.DOLocationID ')
+    if two_way:
+        command += (f'AND ((l1.Borough in ({start_boro_string}) '
+                    f'AND l2.Borough in ({end_boro_string})) '
+                    f'OR (l2.Borough in ({start_boro_string}) '
+                    f'AND l1.Borough in ({end_boro_string})))'
                    )
+    else:
+        command += (f'AND l1.Borough in ({start_boro_string}) '
+                    f'AND l2.Borough in ({end_boro_string})')
 
     return command
 
@@ -316,7 +331,7 @@ def get_significant_data(features, values, cutoff):
 
 def extract_all_features(conn, table_name, coords_table_name='coordinates', boros_table_name='locations',
     datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None,
-    end_super_boro=None, cutoff_val=1e5):
+    end_super_boro=None, cutoff_val=1e5, two_way=True, use_nn_ordering=False):
     """Extracts the features from all the data entries 
     in the given table of the database
 
@@ -324,9 +339,9 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
     :table_name: name of the table holding the rides data
     :coords_table_name: name of the table holding the coordinates data
     :boross_table_name: name of the table holding the boroughs data
-    :datetime_onehot: boolean for whether we want a onehot represnetation for
+    :datetime_onehot: boolean for whether we want a onehot representation for
         date and time values, or a single index one
-    :weekdays_onehot: boolean for whether we want a onehot represnetation for
+    :weekdays_onehot: boolean for whether we want a onehot representation for
         day of the week value, or a single index one
     :include_loc_ids: boolean for whether to include locIds as one-hot
         in the feature vectors, or not 
@@ -335,6 +350,8 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
     :end_super_boro: if not None, a list of strings representing the boros that all rides should
         start and end in. If not None, start_super_boro should also not be None.
     :cutoff_val: the cutoff value for an output to be significant
+    :two_way: whether or not to include rides starting in end_super_bro and starting in start_super_boro
+    :use_nn_ordering: whether or not to rearrange feature vectors to be used by our neural network
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -354,9 +371,18 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
     # extracting boroughs for all locations
     boros = extract_all_boroughs(conn, boros_table_name)
 
+    count_cmd = (f'SELECT COUNT(PULocationID) FROM {table_name} ')
+    try:
+        cursor.execute(count_cmd)
+    except Error as e:
+        print(e)
+    NUM_ROWS = cursor.fetchone()[0]
+    assert type(NUM_ROWS) is int, f'cursor.fetchone() has returned {type(NUM_ROWS)} instead of an int.'
+
     print("Extracting data in batches of size {}".format(limit))
     stop_condition = False
-    while True:
+    set_flag = False
+    while batch_num*limit < NUM_ROWS:
         print("Reading data for batch number {}".format(batch_num))
         command = ('SELECT tpep_pickup_datetime, tpep_dropoff_datetime, '
                    'PULocationID, DOLocationID '
@@ -367,7 +393,7 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
                    f'OFFSET {offset}')
 
         if start_super_boro is not None and end_super_boro is not None:
-            command = filter_for_boros(command, start_super_boro, end_super_boro)
+            command = filter_for_boros(command, start_super_boro, end_super_boro, two_way)
         
         try:
             cursor.execute(command)
@@ -378,17 +404,22 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
         if stop_condition:
             break
         
+        batch_num += 1
+        
         rows = np.array(cursor.fetchall())
         if len(rows) == 0:
-            break
+            offset += limit
+            continue
 
         print("Extracting features from the read data")
-        if offset == 0:
+        if not set_flag:
             features, outputs = get_naive_features(rows, coords, boros, 
                                     datetime_onehot=datetime_onehot, 
                                     weekdays_onehot=weekdays_onehot, 
-                                    include_loc_ids=include_loc_ids)
+                                    include_loc_ids=include_loc_ids,
+                                    use_nn_ordering=use_nn_ordering)
             features, outputs = get_significant_data(features, outputs, cutoff_val)
+            set_flag = True
         else:
             features_sample, outputs_sample = get_naive_features(rows, coords, boros, 
                                                 datetime_onehot=datetime_onehot, 
@@ -401,16 +432,15 @@ def extract_all_features(conn, table_name, coords_table_name='coordinates', boro
             else:
                 features = sparse.vstack([features, features_sample], format="csr")
             outputs = np.concatenate((outputs, outputs_sample))
-
-        batch_num += 1
         offset += limit
+
     return features, outputs
 
 
 def extract_random_data_features(conn, table_name, random_size, 
     coords_table_name='coordinates', boros_table_name='locations', 
     start_super_boro=None, end_super_boro=None, datetime_onehot=True, weekdays_onehot=True, 
-    include_loc_ids=True, cutoff_val=1e5):
+    include_loc_ids=True, cutoff_val=1e5, two_way=True, use_nn_ordering=False):
     """Extracts the features from a random batch of data 
     from the table of the database
 
@@ -430,6 +460,8 @@ def extract_random_data_features(conn, table_name, random_size,
     :include_loc_ids: boolean for whether to include locIds as one-hot
         in the feature vectors, or not 
     :cutoff_val: the cutoff value for an output to be significant
+    :two_way: whether or not to include rides starting in end_super_bro and starting in start_super_boro
+    :use_nn_ordering: whether or not to rearrange feature vectors to be used by our neural network
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -456,19 +488,24 @@ def extract_random_data_features(conn, table_name, random_size,
                f'LIMIT {random_size}')
 
     if start_super_boro is not None and end_super_boro is not None:
-        command = filter_for_boros(command, start_super_boro, end_super_boro)
+        command = filter_for_boros(command, start_super_boro, end_super_boro, two_way)
 
     print('Reading data entries from the table in the database')
-    try:
-        cursor.execute(command)
-    except sqlite3.Error as e:
-        print(e)
+    
+    while True:
+        try:
+            cursor.execute(command)
+        except sqlite3.Error as e:
+            print(e)
 
-    rows = np.array(cursor.fetchall())
+        rows = np.array(cursor.fetchall())
+        if (rows.shape[0] > 0):
+            break
 
     print("Making feature vectors from the extracted data")
     features, outputs = get_naive_features(rows, coords, boros, datetime_onehot=datetime_onehot, 
-                            weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids)
+                            weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,
+                            use_nn_ordering=use_nn_ordering)
 
     features, outputs = get_significant_data(features, outputs, cutoff_val)
     return features, outputs
@@ -478,7 +515,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
     coords_table_name='coordinates', boros_table_name='locations',
     datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True,
     replace_blk=False, verbose=False, start_super_boro=None,
-    end_super_boro=None, cutoff_val=1e5):
+    end_super_boro=None, cutoff_val=1e5, two_way=True, use_nn_ordering=False):
     """Extracts the features from a batch of data
     from the table of the database, without shuffling
 
@@ -503,6 +540,8 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
     :end_super_boro: if not None, a list of strings representing the boros that all rides should
         start and end in. If not None, start_super_boro should also not be None.
     :cutoff_val: the cutoff value for an output to be significant
+    :two_way: whether or not to include rides starting in end_super_bro and starting in start_super_boro
+    :use_nn_ordering: whether or not to rearrange feature vectors to be used by our neural network
     :returns: a generator that yields each minibatch
         as a (features, outputs) pair.
     """
@@ -556,7 +595,7 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
                        f'OFFSET {blk_idx * block_size}')
 
             if start_super_boro is not None and end_super_boro is not None:
-                command = filter_for_boros(command, start_super_boro, end_super_boro)
+                command = filter_for_boros(command, start_super_boro, end_super_boro, two_way=True)
 
             query_start = time()
             try:
@@ -566,14 +605,14 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
 
             rows = np.array(cursor.fetchall())
             if len(rows) == 0:
-                break
+                continue
             if verbose:
                 print(f">>> Time taken for query: {time() - query_start} seconds")
 
             preproc_start = time()
             if i == 0:
                 features, outputs = get_naive_features(rows, coords, boros, datetime_onehot=datetime_onehot, 
-                                        weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids)
+                                        weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, use_nn_ordering=use_nn_ordering)
                 if verbose:
                     print(f">>> Time taken for preproc: {time() - preproc_start} seconds")
             else:
@@ -592,9 +631,11 @@ def extract_batch_features(conn, table_name, batch_size, block_size,
         yield features, outputs
 
 
+
 def extract_features(conn, table_name, variant='all', size=None, block_size=None, 
     datetime_onehot=True, weekdays_onehot=True, include_loc_ids=True, start_super_boro=None, 
-    end_super_boro=None, stddev_multiplier=1, cutoff_data_csv='./data_analysis/multiplier_tbl.csv'):
+    end_super_boro=None, stddev_multiplier=1, cutoff_data_csv='./data_analysis/multiplier_tbl.csv', two_way=True,
+    use_nn_ordering=False):
     """Reads the data from the database and obtains the features
 
     :conn: connection object to the database
@@ -622,6 +663,8 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         start and end in. If not None, start_super_boro should also not be None.
     :stddev_multiplier: the number of std devs to be taken around the mean
     :cutoff_data_csv: the csv file containing the cutoff for different multiplier values
+    :two_way: whether or not to include rides starting in end_super_bro and starting in start_super_boro
+    :use_nn_ordering: whether or not to rearrange feature vectors to be used by our neural network
     :returns: a sparse csr_matrix containing the feature vectors
         and a numpy array containing the corresponding values
         of the travel time
@@ -633,7 +676,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         print('Extracting features from all the data in {}'.format(table_name))
         features, outputs = extract_all_features(conn, table_name, datetime_onehot=datetime_onehot, 
                                 weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro, 
-                                end_super_boro=end_super_boro, cutoff_val=cutoff_val)
+                                end_super_boro=end_super_boro, cutoff_val=cutoff_val, two_way=two_way, use_nn_ordering=use_nn_ordering)
 
     elif variant == 'random':
         if not isinstance(size, int):
@@ -641,7 +684,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         print('Extracting features from a random batch of data of size {} in {}'.format(size, table_name))
         features, outputs = extract_random_data_features(conn, table_name, size, datetime_onehot=datetime_onehot, 
                                 weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids, start_super_boro=start_super_boro,
-                                end_super_boro=end_super_boro, cutoff_val=cutoff_val)
+                                end_super_boro=end_super_boro, cutoff_val=cutoff_val, two_way=two_way, use_nn_ordering=use_nn_ordering)
 
     elif variant == 'batch':
         if size is None:
@@ -653,7 +696,7 @@ def extract_features(conn, table_name, variant='all', size=None, block_size=None
         print('Extracting features from a batch of data of size {} block_size in {}'.format(size, block_size, table_name))
         return extract_batch_features(conn, table_name, size, block_size, datetime_onehot=datetime_onehot,
                     weekdays_onehot=weekdays_onehot, include_loc_ids=include_loc_ids,replace_blk=True, verbose=False,
-                    start_super_boro=start_super_boro, end_super_boro=end_super_boro, cutoff_val=cutoff_val)
+                    start_super_boro=start_super_boro, end_super_boro=end_super_boro, cutoff_val=cutoff_val, two_way=two_way, use_nn_ordering=use_nn_ordering)
     
     else:
         sys.exit("Type must be one of {'all', 'random', 'batch'}.")
@@ -666,10 +709,10 @@ if __name__ == "__main__":
     con = create_connection(db_name)   
     # We have a total of 67302302 entries in the rides table 
     features_, outputs_ = extract_features(con, "rides", variant='random', size=10,
-                                           start_super_boro=['Manhattan', 'Bronx', 'EWR'],
-                                           end_super_boro=['Brooklyn', 'Queens'],
-                                           datetime_onehot=False, weekdays_onehot=False,
-                                           include_loc_ids=False, stddev_multiplier=1)
+                                           start_super_boro=['Manhattan'],
+                                           end_super_boro=['Manhattan'],
+                                           datetime_onehot=True, weekdays_onehot=True,
+                                           include_loc_ids=True, stddev_multiplier=1, two_way=False)
     # for idx, (features_, outputs_) in enumerate(extract_features(con, "rides", variant='batch', size=100000, block_size=1000)):
         # print(f'Batch {idx}) features: {features_.shape}, outputs: {outputs_.shape}')
         # break

@@ -1,15 +1,16 @@
 import sqlite3
 
 
-def create_connection(db_file):
+def create_connection(db_file, check_same_thread=True):
     """ create a database connection to the SQLite database
         specified by the db_file
     :param db_file: database file
     :return: Connection object or None
     """
     conn = None
+    print(db_file)
     try:
-        conn = sqlite3.connect(db_file)
+        conn = sqlite3.connect(db_file, check_same_thread=check_same_thread)
     except sqlite3.Error as error:
         print(error)
     return conn
