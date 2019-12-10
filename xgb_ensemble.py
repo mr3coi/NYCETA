@@ -251,13 +251,13 @@ def crossboro_preproc_setup(conn):
 
             first_leg = features.copy()
             first_leg[0, indices[boro_end_from_end]] = 0
-            first_leg[0, bridge_start_boro_id + boro_start_index] = 1
+            first_leg[0, bridge_start_boro_id + boro_start_index + 6] = 1
             first_leg[0, boro_start_index - 1] = coordinates[start_zone][0]
             first_leg[0, boro_start_index] = coordinates[start_zone][1]
 
             second_leg = features.copy()
             second_leg[0, indices[boro_start_from_end]] = 0
-            second_leg[0, bridge_end_boro_id + boro_start_index + 6] = 1
+            second_leg[0, bridge_end_boro_id + boro_start_index] = 1
             second_leg[0, boro_start_index - 3] = coordinates[end_zone][0]
             second_leg[0, boro_start_index - 2] = coordinates[end_zone][1]
 
