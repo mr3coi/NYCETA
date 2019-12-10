@@ -19,12 +19,27 @@ parser = argparse.ArgumentParser(
     )
 
 # Super-boro models for inference
-parser.add_argument("-sb1", "--sb1-model-path", type=str, default="models/sb11_sm1.0_001_2019-12-06-11-22-49.xgb",
-                    help="Path to the stored model for Super-boro 1 (MEBx)")
-parser.add_argument("-sb2", "--sb2-model-path", type=str, default="models/sb22_sm1.0_001_2019-12-09-13-31-09.xgb",
-                    help="Path to the stored model for Super-boro 2 (BkQ)")
-parser.add_argument("-sb3", "--sb3-model-path", type=str, default="models/sb33_sm1.0_001_2019-12-08-21-02-35.xgb",
-                    help="Path to the stored model for Super-boro 3 (St)")
+BEST_MODEL_PATHS = {
+    "111": ["models/sb11_sm1.0_111_2019-12-06-04-08-05.xgb",
+            "models/sb22_sm1.0_111_2019-12-09-19-16-01.xgb",    # Val Loss: 336.6702
+            "models/sb33_sm1.0_111_2019-12-08-21-01-14.xgb",],
+    "001": ["models/sb11_sm1.0_001_2019-12-06-11-22-49.xgb",
+            "models/sb22_sm1.0_001_2019-12-09-19-16-24.xgb",
+            "models/sb33_sm1.0_001_2019-12-08-21-02-35.xgb",],
+    "110": ["",
+            "models/sb22_sm1.0_110_2019-12-09-18-57-34.xgb",    # Val Loss: 335.2700
+            "models/sb33_sm1.0_110_2019-12-09-18-49-37.xgb",],  # Val Loss: 589.2293
+}
+
+parser.add_argument("-sb1", "--sb1-model-path", type=str,
+                    help="Path to the stored model for Super-boro 1 (MEBx), "
+                         "will be automatically set")
+parser.add_argument("-sb2", "--sb2-model-path", type=str,
+                    help="Path to the stored model for Super-boro 2 (BkQ), "
+                         "will be automatically set")
+parser.add_argument("-sb3", "--sb3-model-path", type=str,
+                    help="Path to the stored model for Super-boro 3 (St), "
+                         "will be automatically set")
 
 # Dataset
 parser.add_argument("-sm", "--stddev-mul", type=float,
@@ -447,6 +462,12 @@ def main():
              f"{int(args.weekdays_one_hot)}" \
              f"{int(args.loc_id)}" \
              "_outputs.npy"
+
+    models_key = f"{int(args.datetime_one_hot)}" \
+                 f"{int(args.weekdays_one_hot)}" \
+                 f"{int(args.loc_id)}"
+    args.sb1_model_path, args.sb2_model_path, args.sb3_model_path = \
+        BEST_MODEL_PATHS[models_key]
 
     if args.use_saved:  # Load arrays stored in disk
         if args.verbose:
