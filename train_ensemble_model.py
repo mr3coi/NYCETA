@@ -85,7 +85,7 @@ def ensemble_train_batch(featurePU, featureDO, featureDT, output, selector_model
 
 	loss = np.mean(np.square(total_time-output))
 	rmse = np.sqrt(loss)
-	loss_grads = 2*(total_time - output )
+	loss_grads = 2*(total_time - output)
 
 	pu_model.train(pu_input, loss_grads)
 	br_model.train(br_input, loss_grads)
