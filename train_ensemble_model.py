@@ -38,6 +38,12 @@ parser.add_argument("--num-epochs", type=int, default=5,
                     help="the number of epochs to be trained")
 parser.add_argument("--batch-size", type=int, default=1000,
                     help="the batch size to be used for trained")
+parser.add_argument("--hot-start", default=False, action='store_true',
+                    help="whether to start with pre-trained weights for all models")
+parser.add_argument("--start-epoch", type=int, default=0,
+					help='the epoch number to start from')
+parser.add_argument("--ensemble-dir", type=str, default="ensemble",
+					help='the directory storing the ensemble model to hot-start from')
 
 
 def ensemble_predict(featurePU, featureDO, featureDT, selector_model, pu_model, do_model, output=None):
@@ -231,56 +237,16 @@ def batch_nn_generator(PUfeatures, DOfeatures, DTfeatures, values, batch_size):
 			counter=0
 
 
-def save_models(epoch):
-	boros = [1,2,3]
-	if not os.path.isdir('ensemble'):
-		os.mkdir('ensemble')
-	for start_boro in boros:
-		for end_boro in boros:
-			if start_boro == end_boro:
-				continue
-			path = os.path.join('ensemble', 'selectors')
-			if not os.path.isdir(path):
-				os.mkdir(path)
-			path = os.path.join(path, f'start_{start_boro}_end_{end_boro}')
-			if not os.path.isdir(path):
-				os.mkdir(path)
-			weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
-			selectors[start_boro][end_boro].save_model_weights(weight_path)
-			path = os.path.join(path, f'epoch_{epoch}')
-			selectors[start_boro][end_boro].save_model(path)
-
-	for boro in boros:
-		path = os.path.join('ensemble', 'boro_models')
-		if not os.path.isdir(path):
-			os.mkdir(path)
-		path = os.path.join(path, f'boro_{boro}')
-		if not os.path.isdir(path):
-			os.mkdir(path)
-		weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
-		boro_models[boro].save_model_weights(weight_path)
-		path = os.path.join(path, f'epoch_{epoch}')
-		boro_models[boro].save_model(path)
-
-	path = os.path.join('ensemble', 'bridge')
-	if not os.path.isdir(path):
-		os.mkdir(path)
-	weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
-	br_model.save_model_weights(weight_path)
-	path = os.path.join(path, f'epoch_{epoch}')
-	br_model.save_model(path)
-
-
-def train(PUfeatures, DOfeatures, DTfeatures, values, num_epochs=5, batch_size=1000):
+def train(PUfeatures, DOfeatures, DTfeatures, values, num_epochs=5, batch_size=1000, start_epoch=0):
 	
 	boros = [1,2,3]
 	
 	with open('ensemble_log.txt', 'w') as f:
 		f.write(f'epoch, train_RMSE, val_RMSE\n')
 
-	for epoch in range(num_epochs):
+	for epoch in range(start_epoch, start_epoch+num_epochs):
 
-		print(f"\nEpoch {epoch+1}/{num_epochs}")
+		print(f"\nEpoch {epoch+1}/{start_epoch+num_epochs}")
 
 		# training
 		print("Training")
@@ -381,6 +347,66 @@ def train(PUfeatures, DOfeatures, DTfeatures, values, num_epochs=5, batch_size=1
 		save_models(epoch)							
 
 
+def save_models(epoch):
+	boros = [1,2,3]
+	if not os.path.isdir('ensemble'):
+		os.mkdir('ensemble')
+	for start_boro in boros:
+		for end_boro in boros:
+			if start_boro == end_boro:
+				continue
+			path = os.path.join('ensemble', 'selectors')
+			if not os.path.isdir(path):
+				os.mkdir(path)
+			path = os.path.join(path, f'start_{start_boro}_end_{end_boro}')
+			if not os.path.isdir(path):
+				os.mkdir(path)
+			weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
+			selectors[start_boro][end_boro].save_model_weights(weight_path)
+			path = os.path.join(path, f'epoch_{epoch}')
+			selectors[start_boro][end_boro].save_model(path)
+
+	for boro in boros:
+		path = os.path.join('ensemble', 'boro_models')
+		if not os.path.isdir(path):
+			os.mkdir(path)
+		path = os.path.join(path, f'boro_{boro}')
+		if not os.path.isdir(path):
+			os.mkdir(path)
+		weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
+		boro_models[boro].save_model_weights(weight_path)
+		path = os.path.join(path, f'epoch_{epoch}')
+		boro_models[boro].save_model(path)
+
+	path = os.path.join('ensemble', 'bridge')
+	if not os.path.isdir(path):
+		os.mkdir(path)
+	weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
+	br_model.save_model_weights(weight_path)
+	path = os.path.join(path, f'epoch_{epoch}')
+	br_model.save_model(path)
+
+
+def load_hot_start(epoch, ensemble_dir='ensemble'):
+	boros = [1,2,3]
+	for start_boro in boros:
+		for end_boro in boros:
+			if start_boro == end_boro:
+				continue
+			path = os.path.join(ensemble_dir, 'selectors')
+			path = os.path.join(path, f'start_{start_boro}_end_{end_boro}')
+			weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
+			selectors[start_boro][end_boro].load_model_weights(weight_path)
+
+	for boro in boros:
+		path = os.path.join(ensemble_dir, 'boro_models')
+		path = os.path.join(path, f'boro_{boro}')
+		weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
+		boro_models[boro].load_model_weights(weight_path)
+
+	path = os.path.join(ensemble_dir, 'bridge')
+	weight_path = os.path.join(path, f'weights-{epoch:04d}.h5')
+	br_model.load_model_weights(weight_path)
 
 
 def main():
@@ -397,6 +423,9 @@ def main():
 	data_file = parsed_args.data_file
 	num_epochs = parsed_args.num_epochs
 	batch_size = parsed_args.batch_size
+	hot_start = parsed_args.hot_start
+	start_epoch = parsed_args.start_epoch
+	ensemble_dir = parsed_args.ensemble_dir
 
 
 	boro_model_weights = {
@@ -444,8 +473,15 @@ def main():
 	# create bridge model
 	br_model = BoroModel(sess, feature_vec_size, [100, 50])
 
+	# hot start
+	if hot_start:
+		if start_epoch == 0:
+			print("Please provide a start epoch if you hot start.")
+			exit(1)
+		load_hot_start(start_epoch-1, ensemble_dir)
+
 	# train 
-	train(PUfeatures, DOfeatures, DTfeatures, values, num_epochs, batch_size)
+	train(PUfeatures, DOfeatures, DTfeatures, values, num_epochs, batch_size, start_epoch)
 
 
 if __name__ == "__main__":
