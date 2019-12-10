@@ -141,3 +141,4 @@ class SelectorModel(object):
 
     def load_model_weights(self, path):
         self.model.load_weights(path)
+        
