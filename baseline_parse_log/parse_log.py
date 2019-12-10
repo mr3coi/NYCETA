@@ -13,6 +13,12 @@ parser.add_argument("-d", "--directory", type=str, default=None,
                          "directory will be parsed and visualized")
 parser.add_argument("-f", "--file", type=str, default=None,
                     help="Path to a single log file")
+parser.add_argument("-doh", "--datetime-one-hot", type=int, default=None,
+                    help="Let the date & time features be loaded as one-hot")
+parser.add_argument("-woh", "--weekdays-one-hot", type=int, default=None,
+                    help="Let the week-of-the-day feature be loaded as one-hot")
+parser.add_argument("--loc-id", dest='loc_id', type=int, default=None,
+                    help="Let the zone IDs be excluded from the dataset")
 
 def num_or_str(string):
     tokens = string.split(".")
@@ -83,15 +89,21 @@ def parse_stats_in_dir(dir_path):
             
     return stats
 
-def return_smallest(stats):
+def return_smallest(stats, doh=None, woh=None, loc_id=None):
     min_val_loss = 1000000
     min_cfg = None
     min_idx = -1
     min_iter = -1
     min_name = None
+    check = doh is not None or woh is not None \
+            or loc_id is not None
     for idx, (cfg, losses, fname) in enumerate(stats):
         min_it = np.argmin(losses[:,-1])
         if losses[min_it,-1] < min_val_loss:
+            if check and (cfg['datetime_one_hot'] != doh or \
+                cfg['weekdays_one_hot'] != woh or \
+                cfg['loc_id'] != loc_id):
+                continue
             min_val_loss = losses[min_it,-1]
             min_cfg = cfg
             min_idx = idx
@@ -109,7 +121,10 @@ def main():
     if args.directory is not None:
         stats = parse_stats_in_dir(args.directory)
         min_val_loss, min_idx, min_iter, min_cfg, min_name \
-            = return_smallest(stats)
+            = return_smallest(stats,
+                              doh=args.datetime_one_hot,
+                              woh=args.weekdays_one_hot,
+                              loc_id=args.loc_id,)
         print(f"[{min_name}]: {min_val_loss} at {min_iter+1}")
         print(min_cfg)
 
