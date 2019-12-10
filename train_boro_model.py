@@ -72,9 +72,6 @@ parser.add_argument("--model-path", type=str, default=None,
                     help="Path to the model to hot start from")
 
 
-TOTAL_ENTRIES_IN_DB = 67302302
-
-
 def nn_batch_generator(X_data, y_data, batch_size):
     samples_per_epoch = X_data.shape[0]
     number_of_batches = int(samples_per_epoch/batch_size)
