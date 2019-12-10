@@ -321,14 +321,14 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
             log_file.write(f"sb3: {args.sb3_model_path} \n")
             log_file.write("\n")
 
-    breakpoint = args.log if args.log > 0 else 10000
+    breakpoint = args.log if args.log > 0 else 10
 
     # Iterate through each cross-superboro trip
     for idx, (inputs_, output) in enumerate(zip(features, outputs)):
         inputs = convert(inputs_)
 
-        min_loss = 1e20
-        max_loss = -1
+        min_duration = 1e20
+        max_duration = -1
 
         # Compute loss for each bridge and record minimum
         for (sb_PU, sb_DO, f_PU, f_DO) in inputs:
@@ -340,21 +340,22 @@ def evaluate(models, features, outputs, doh, woh, loc_id, args):
             DO_duration = models[sb_DO].predict(f_DO_dmat)[0]
 
             # Compute total duration & MSE loss
-            pred = PU_duration + DO_duration
-            loss = (pred - output)**2
-            min_loss = min(min_loss, loss)
-            max_loss = max(max_loss, loss)
+            duration = PU_duration + DO_duration
+            min_duration = min(min_duration, duration)
+            max_duration = max(max_duration, duration)
 
+        # For debugging purposes
         if args.verbose > 1:
             print(f"[{idx+1:8}] "
-                  f"min: {np.sqrt(min_loss):25.3f}, "
-                  f"max: {np.sqrt(max_loss):30.3f}")
+                  f"min: {min_duration:15.3f}, "
+                  f"max: {max_duration:15.3f}, "
+                  f"Target: {output}")
 
-            if min_loss == 1e20:
+            if min_duration == 1e20:
                 print(inputs_)
                 print(inputs)
 
-        total_loss += min_loss
+        total_loss += (min_duration - output)**2
 
         if (idx+1) % breakpoint == 0:
             if args.verbose > 0:
