@@ -181,15 +181,15 @@ def crossboro_preproc_setup(conn):
         if doh:
             boro_start_index += 182
 
-        boro_start_index = -4
-        boro_end_index = -3
+        boro_start_from_end = -4
+        boro_end_from_end = -3
         if not loc_id:
-            boro_start_index += 2
-            boro_end_index += 2
+            boro_start_from_end += 2
+            boro_end_from_end += 2
 
-        start_boro_one_hot = indices[boro_start_index] - boro_start_index
+        start_boro_one_hot = indices[boro_start_from_end] - boro_start_index
         start_boro = inverted_boro_dict[start_boro_one_hot]
-        end_boro_one_hot = indices[boro_end_index] - (boro_start_index + 6)
+        end_boro_one_hot = indices[boro_end_from_end] - (boro_start_index + 6)
         end_boro = inverted_boro_dict[end_boro_one_hot]
         start_code = 0
         end_code = 0
@@ -250,13 +250,13 @@ def crossboro_preproc_setup(conn):
             bridge_end_boro_id = BOROUGHS[bridge_end_boro]
 
             first_leg = features.copy()
-            first_leg[0, indices[boro_end_index]] = 0
+            first_leg[0, indices[boro_end_from_end]] = 0
             first_leg[0, bridge_start_boro_id + boro_start_index] = 1
             first_leg[0, boro_start_index - 1] = coordinates[start_zone][0]
             first_leg[0, boro_start_index] = coordinates[start_zone][1]
 
             second_leg = features.copy()
-            second_leg[0, indices[boro_start_index]] = 0
+            second_leg[0, indices[boro_start_from_end]] = 0
             second_leg[0, bridge_end_boro_id + boro_start_index + 6] = 1
             second_leg[0, boro_start_index - 3] = coordinates[end_zone][0]
             second_leg[0, boro_start_index - 2] = coordinates[end_zone][1]
