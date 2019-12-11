@@ -19,6 +19,10 @@ parser = argparse.ArgumentParser(
     )
 
 # Super-boro models for inference
+# NOTE: The models whose names are specified below are not
+#       part of the repo; to run this code, first use
+#       `baseline_model.py` script to train and save each
+#       super-borough model
 BEST_MODEL_PATHS = {
     "111": ["models/sb11_sm1.0_111_2019-12-06-04-08-05.xgb",
             "models/sb22_sm1.0_111_2019-12-09-19-16-01.xgb",    # Val Loss: 336.6702
